@@ -145,8 +145,54 @@ class Transcript(object):
         self.stop_complete = stopc
 
 
+    def check_5prime_partial_mrna(self,feature):
+        """Apply NCBI's partial marks to a segment, if applicable.
+        NCBI's rules are basically that an mRNA is incomplete if it
+        doesn't include a 5'/3' UTR. Therefore if the first exon
+        segment's start is identical to the first CDS segment, then
+        the mRNA is 5' incomplete. Likewise, if the last exon's
+        end is the same as the last CDS segment's, then it's 3'
+        incomplete.
+        """
+
+        # if there are no CDS, there can be no check
+        if len(self.cds) < 1:
+            return feature
+
+        else:
+            if int(self.exons[0].start) == int(self.cds[0].start):
+                feature.start = "<"+feature.start
+                return feature
+
+            else:
+                return feature
+
+
+    def check_3prime_partial_mrna(self,feature):
+        """Apply NCBI's partial marks to a segment, if applicable.
+        NCBI's rules are basically that an mRNA is incomplete if it
+        doesn't include a 5'/3' UTR. Therefore if the first exon
+        segment's start is identical to the first CDS segment, then
+        the mRNA is 5' incomplete. Likewise, if the last exon's
+        end is the same as the last CDS segment's, then it's 3'
+        incomplete.
+        """
+
+        # if there are no CDS, there can be no check
+        if len(self.cds) < 1:
+            return feature
+
+        else:
+            if int(self.exons[-1].start) == int(self.cds[-1].start):
+                feature.start = ">"+feature.start
+                return feature
+
+            else:
+                return feature
+
+
     def print_single_seg(self,feature,format='gff'):
-        """Print the only exons/CDS segment in a transcript.
+        """Print the only exon/CDS segment in a transcript.
         Format = 'gff' or 'tbl'
         """
         if format == 'gff':
@@ -439,6 +485,7 @@ class Gene(object):
         self.gene = gene
         self.strand = gene.strand
         self.transcript = {}
-#TODO mangage incompleteness
+# TODO mangage incompleteness
+# TODO manage ncRNA
 
 ### EOF ###
