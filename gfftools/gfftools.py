@@ -1,3 +1,14 @@
+"""Classes and functions to work with GFF3 files
+Written by S. Austin Hammond, BCGSC
+
+GFF: main class
+Gene: object to hold gene records and associated transcripts
+Transcript: object to hold exons, cds, and info associated with a
+    particular transcript. Includes methods to print exon and CDS
+    segments, and check if terminal CDS segments have start/stop
+    codons.
+"""
+
 import re
 
 class GFF(object):
