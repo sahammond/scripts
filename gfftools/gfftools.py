@@ -74,6 +74,7 @@ class Transcript(object):
         if len(self.exons) == 0:
             self.exons.append(feature)
         else:
+            # TODO currently only compares to final exon in list for redundancy
             if int(feature.start) == int(self.exons[-1].start):
                 print ("There is already an exon with that start in "
                         "this transcript. Please check your input.")
@@ -168,32 +169,47 @@ class Transcript(object):
                 return feature
 
 
-    def print_single_seg(self,feature,outform=None):
+    def print_single_seg(self,feature,product_type=None,outform=None):
         """Print the only exon/CDS segment in a transcript.
 
-        Format = 'gff' or 'tbl'
+        product_type = 'mRNA' or 'ncRNA'
+        outform = 'gff' or 'tbl'
 
         """
         if outform is None:
             outform = 'tbl'
+        if product_type is None:
+            product_type = 'mRNA'
         if outform == 'gff':
             return feature.raw
-        # TODO handle incomplete first seq
+        # TODO handle incomplete first seg
         elif outform == 'tbl':
             outbuff = []
             if feature.type == "exon":
                 if feature.strand == "-":
-                    outbuff.append("\t".join([feature.end,feature.start,"mRNA"]))
-                else:
-                    outbuff.append("\t".join([feature.start,feature.end,"mRNA"]))
+                    if product_type == "mRNA":
+                        outbuff.append("\t".join([feature.end,feature.start,"mRNA"]))
+                    elif product_type == "ncRNA":
+                        outbuff.append("\t".join([feature.end,feature.start,"ncRNA"]))
+                if feature.strand == "+":
+                    if product_type == "mRNA":
+                        outbuff.append("\t".join([feature.start,feature.end,"mRNA"]))
+                    elif product_type == "ncRNA":
+                        outbuff.append("\t".join([feature.start,feature.end,"ncRNA"]))
+                if product_type == "ncRNA":
+                    outbuff.append("\t\t\tncRNA_class\tlncRNA")
                 if self.transcript.product:
                     outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
                 if self.transcript.note:
                     outbuff.append("\t".join(["\t\t\tnote",self.transcript.note]))
-
-                outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",feature.parent[0]]))
-                outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",feature.parent[0],"_mRNA","\n"]))
-
+                if product_type == "mRNA":
+                    outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
+                                            feature.parent[0]]))
+                    outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
+                                            feature.parent[0],"_mRNA\n"]))
+                if product_type == "ncRNA":
+                    outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
+                                            feature.parent[0],"_ncRNA\n"]))
             elif feature.type == "CDS":
                 if feature.strand == "-":
                     outbuff.append("\t".join([feature.end,feature.start,"CDS"]))
@@ -206,10 +222,12 @@ class Transcript(object):
                     outbuff.append("\t".join(["\t\t\tnote",self.transcript.note]))
 
                 outbuff.append("\t\t\tcodon_start\t1")
-                outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",feature.parent[0]]))
-                outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",feature.parent[0],"_mRNA","\n"]))
+                outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
+                                        feature.parent[0]]))
+                outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
+                                        feature.parent[0],"_mRNA\n"]))
 
-        return "\n".join(outbuff)
+            return "\n".join(outbuff)
 
 
     def print_internal_seg(self,feature,outform=None):
@@ -229,42 +247,55 @@ class Transcript(object):
             else:
                 outbuff.append("\t".join([feature.start,feature.end]))
 
+            return "\n".join(outbuff)
 
-    def print_first_seg(self,feature,outform=None):
+    def print_first_seg(self,feature,product_type=None,outform=None):
         """Print the first exon/CDS line or segment.
 
-        Format = 'gff' or 'tbl'
+        product_type = 'mRNA' or 'ncRNA'
+        outform = 'gff' or 'tbl'
 
         """
         if outform is None:
             outform = 'tbl'
+        if product_type is None:
+            product_type = 'mRNA'
         if outform == 'gff':
             return feature.raw
-        # TODO handle incomplete first seq
+        # TODO handle incomplete first seg
         elif outform == 'tbl':
             outbuff = []
             if feature.type == "exon":
                 if feature.strand == "-":
-                    outbuff.append("\t".join([feature.end,feature.start,"mRNA"]))
-                else:
-                    outbuff.append("\t".join([feature.start,feature.end,"mRNA"]))
+                    if product_type == "mRNA":
+                        outbuff.append("\t".join([feature.end,feature.start,"mRNA"]))
+                    if product_type == "ncRNA":
+                        outbuff.append("\t".join([feature.end,feature.start,"ncRNA"]))
+                if feature.strand == "+":
+                    if product_type == "mRNA":
+                        outbuff.append("\t".join([feature.start,feature.end,"mRNA"]))
+                    if product_type == "ncRNA":
+                        outbuff.append("\t".join([feature.start,feature.end,"ncRNA"]))
             elif feature.type == "CDS":
                 if feature.strand == "-":
                     outbuff.append("\t".join([feature.end,feature.start,"CDS"]))
-                else:
+                if feature.strand == "+": ###
                     outbuff.append("\t".join([feature.start,feature.end,"CDS"]))
 
             return "\n".join(outbuff)
 
 
-    def print_last_seg(self,feature,outform=None):
+    def print_last_seg(self,feature,product_type=None,outform=None):
         """Print the final exon/CDS line or segment.
 
-        Format = 'gff' or 'tbl'
+        product_type = 'mRNA' or 'ncRNA'
+        outform = 'gff' or 'tbl'
 
         """
         if outform is None:
             outform = 'tbl'
+        if product_type is None:
+            product_type = 'mRNA'
         if outform == 'gff':
             return feature.raw
         # TODO handle incomplete first seq
@@ -279,9 +310,15 @@ class Transcript(object):
                     outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
                 if self.transcript.note:
                     outbuff.append("\t".join(["\t\t\tnote",self.transcript.note]))
-
-                outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",feature.parent[0]]))
-                outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",feature.parent[0],"_mRNA","\n"]))
+                if product_type == "mRNA":
+                    outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
+                                            feature.parent[0]]))
+                    outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
+                                            feature.parent[0],"_mRNA\n"]))
+                if product_type == "ncRNA":
+                    outbuff.append("\t\t\tncRNA_class\tlncRNA")
+                    outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
+                                            feature.parent[0],"_ncRNA\n"]))
             elif feature.type == "CDS":
                 if feature.strand == "-":
                     outbuff.append("\t".join([feature.end,feature.start]))
@@ -293,19 +330,24 @@ class Transcript(object):
                     outbuff.append("\t".join(["\t\t\tnote",self.transcript.note]))
 
                 outbuff.append("\t\t\tcodon_start\t1")
-                outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",feature.parent[0]]))
-                outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",feature.parent[0],"_mRNA","\n"]))
+                outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
+                                        feature.parent[0]]))
+                outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
+                                        feature.parent[0],"_mRNA\n"]))
 
             return "\n".join(outbuff)
 
-    def print_transcript(self,outform=None):
+    def print_transcript(self,product_type=None,outform=None):
         """Print a transcript with exons (and cds segments).
 
-        Outform = 'gff' or 'tbl'
+        product_type = 'mRNA' or 'ncRNA'
+        outform = 'gff' or 'tbl'
 
         """
         if outform is None:
             outform = 'tbl'
+        if product_type is None:
+            product_type = 'mRNA'
         if outform == 'gff':
             outbuff = []
             outbuff.append(self.transcript.raw)
@@ -318,56 +360,76 @@ class Transcript(object):
                     outbuff.append(segment.raw)
 
             return "\n".join(outbuff)
-        # TODO add outform passing to each print_x_seg call
         elif outform == 'tbl':
             outbuff = []
             if len(self.exons) == 1:
-                return self.print_single_seg(self.exons[0])
+                return self.print_single_seg(self.exons[0],product_type,outform)
             if len(self.exons) > 1:
                 if self.strand == "-":
                     if len(self.exons) == 2:
-                        outbuff.append(self.print_first_seg(self.exons[1]))
-                        outbuff.append(self.print_last_seg(self.exons[0]))
-                    else:
-                        outbuff.append(self.print_first_seg(self.exons[-1]))
+                        outbuff.append(self.print_first_seg(self.exons[1],product_type,
+                                        outform))
+                        outbuff.append(self.print_last_seg(self.exons[0],product_type,
+                                        outform))
+                    if len(self.exons) > 2:
+                        outbuff.append(self.print_first_seg(self.exons[-1],product_type,
+                                        outform))
                         for segment in range(0,len(self.exons))[1:-1][::-1]:
-                           outbuff.append(self.print_internal_seg(self.exons[segment]))
+                           outbuff.append(self.print_internal_seg(self.exons[segment],
+                                            outform))
                         else:
-                            outbuff.append(self.print_last_seg(self.exons[0]))
-                else:
+                            outbuff.append(self.print_last_seg(self.exons[0],
+                                            product_type,outform))
+                if self.strand == "+":
                     if len(self.exons) == 2:
-                        outbuff.append(self.print_first_seg(self.exons[0]))
-                        outbuff.append(self.print_last_seg(self.exons[1]))
-                    else:
-                        outbuff.append(self.print_first_seg(self.exons[0]))
+                        outbuff.append(self.print_first_seg(self.exons[0],product_type,
+                                        outform))
+                        outbuff.append(self.print_last_seg(self.exons[1],product_type,
+                                        outform))
+                    if len(self.exons) > 2:
+                        outbuff.append(self.print_first_seg(self.exons[0],product_type,
+                                        outform))
                         for segment in range(0,len(self.exons))[1:-1]:
-                            outbuff.append(self.print_internal_seg(self.exons[segment]))
+                            outbuff.append(self.print_internal_seg(self.exons[segment],
+                                            outform))
                         else:
-                            outbuff.append(self.print_last_seg(self.exons[-1]))
+                            outbuff.append(self.print_last_seg(self.exons[-1],
+                                            product_type,outform))
             if self.cds:
                 if len(self.cds) == 1:
-                    outbuff.append(self.print_single_seg(self.cds[0]))
+                    outbuff.append(self.print_single_seg(self.cds[0],product_type,
+                                    outform))
                 if len(self.cds) > 1:
                     if self.strand == "-":
                         if len(self.cds) == 2:
-                            outbuff.append(self.print_first_seg(self.cds[1]))
-                            outbuff.append(self.print_last_seg(self.cds[0]))
-                        else:
-                            outbuff.append(self.print_first_seg(self.cds[-1]))
+                            outbuff.append(self.print_first_seg(self.cds[1],
+                                            product_type,outform))
+                            outbuff.append(self.print_last_seg(self.cds[0],product_type,
+                                            outform))
+                        if len(self.cds) > 2:
+                            outbuff.append(self.print_first_seg(self.cds[-1],
+                                            product_type,outform))
                             for segment in range(0,len(self.cds))[1:-1][::-1]:
-                                outbuff.append(self.print_internal_seg(self.cds[segment]))
+                                outbuff.append(self.print_internal_seg(self.cds[segment],
+                                                outform))
                             else:
-                                outbuff.append(self.print_last_seg(self.cds[0]))
-                    else:
+                                outbuff.append(self.print_last_seg(self.cds[0],
+                                            product_type,outform))
+                    if self.strand == "+":
                         if len(self.cds) == 2:
-                            outbuff.append(self.print_first_seg(self.cds[0]))
-                            outbuff.append(self.print_last_seg(self.cds[1]))
-                        else:
-                            outbuff.append(self.print_first_seg(self.cds[0]))
+                            outbuff.append(self.print_first_seg(self.cds[0],product_type,
+                                            outform))
+                            outbuff.append(self.print_last_seg(self.cds[1],product_type,
+                                            outform))
+                        if len(self.cds) > 2:
+                            outbuff.append(self.print_first_seg(self.cds[0],product_type,
+                                            outform))
                             for segment in range(0,len(self.cds))[1:-1]:
-                                outbuff.append(self.print_internal_seg(self.cds[segment]))
+                                outbuff.append(self.print_internal_seg(self.cds[segment],
+                                                outform))
                             else:
-                                outbuff.append(self.print_last_seg(self.cds[-1]))
+                                outbuff.append(self.print_last_seg(self.cds[-1],
+                                                product_type,outform))
 
             #print "\n".join(outbuff)
             return "\n".join(outbuff)
@@ -440,14 +502,14 @@ class Gene(object):
             return self.gene.raw
         elif outform == 'tbl':
             outbuff = []
-            if self.strand == "-":
+            if self.gene.strand == "-":
                 if self.gene.locusid:
                     outbuff.append("".join([self.gene.end,"\t",self.gene.start,"\tgene\n",
                                     "\t\t\tlocus_id\t",self.gene.locusid,"\n"]))
                 else:
                     outbuff.append("".join([self.gene.end,"\t",self.gene.start,"\tgene\n",
                                     "\t\t\tlocus_id\t",self.gene.id,"\n"]))
-            else:
+            if self.gene.strand == "+":
                 if self.gene.locusid:
                     outbuff.append("".join([self.gene.start,"\t",self.gene.end,"\tgene\n",
                                     "\t\t\tlocus_id\t",self.gene.locusid,"\n"]))
@@ -461,10 +523,8 @@ class Gene(object):
     def __init__(self,gene):
         self.gene = gene
         self.id = gene.id
-        self.strand = gene.strand
         self.transcript = {}
 
 # TODO mangage incompleteness
-# TODO manage ncRNA
 
 ### EOF ###

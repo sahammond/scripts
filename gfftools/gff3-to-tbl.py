@@ -4,6 +4,7 @@
 
 import sys
 import re
+import copy
 
 from fastatools import fasta_iter as f
 import gfftools
@@ -54,7 +55,7 @@ ISOALPHA=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R
 #aseen=set() # set to track observed alignments
 #isog={} # dict to track total and 'observed' mRNA isoforms key = gene, value = number of assoc mrnas
 
-#gffout=open(re.sub(".gff","-prepared.gff",gff),"w")
+gffout=open(re.sub(".gff","-prepared.gff",gff),"w")
 tblout=open(re.sub(".gff","-prepared.tbl",gff),"w")
 
 ############
@@ -79,7 +80,7 @@ with open(gff,"r") as infile:
         elif feature.type == "exon":
             for parent in feature.parent:
                 for gene in genes:
-                    if len(re.findall(genes[gene].id,parent)) > 0:
+                    if re.findall(genes[gene].id,parent):
                         genes[gene].transcript[parent].add_exon(feature)
 #                        break
 #                else:
@@ -88,44 +89,62 @@ with open(gff,"r") as infile:
         elif feature.type == "CDS":
             for parent in feature.parent:
                 for gene in genes:
-                    if len(re.findall(genes[gene].id,parent)) > 0:
+                    if re.findall(genes[gene].id,parent):
                         genes[gene].transcript[parent].add_cds(feature)
 #                        break
 #                else:
 #                    print "Failed to find gene for "+feature.id
 
+# TODO make sure gene coordinates agree with new exons 
+###################
 # apparently some maker predictions have CDS entries but no, or too few, exon entries
 # This is either my doing, or maker's. I hate maker.
 # for those predictions, clone the cds to exons
-for gene in genes:
-    for rec in genes[gene].transcript:
-        if len(genes[gene].transcript[rec].cds) > len(genes[gene].transcript[rec].exons):
-            genes[gene].transcript[rec].exons = []
-            for segment in range(0,len(genes[gene].transcript[rec].cds)):
-                genes[gene].transcript[rec].cds[segment].type = "exon"
-                genes[gene].transcript[rec].cds[segment].offset = "."
-
+for entry in genes:
+    for rec in genes[entry].transcript:
+        if len(genes[entry].transcript[rec].cds) > len(genes[entry].transcript[rec].exons):
+            print "Replacing missing exons in "+rec
+            genes[entry].transcript[rec].exons = copy.deepcopy(genes[entry].transcript[rec].cds)
+            for segment in range(0,len(genes[entry].transcript[rec].exons)):
+                genes[entry].transcript[rec].exons[segment].type = "exon"
+                genes[entry].transcript[rec].exons[segment].offset = "."
+                # fix type and offset in raw, for posterity
+                genes[entry].transcript[rec].exons[segment].raw = re.sub("CDS","exon",genes[entry].transcript[rec].exons[segment].raw,flags=re.IGNORECASE)
+                genes[entry].transcript[rec].exons[segment].raw = re.sub("\t[0-9]\t","\t.\t",genes[entry].transcript[rec].exons[segment].raw,flags=re.IGNORECASE)
 # adjust small intron boundaries
 #  ncbi min intron length is 10 bp
 # use steps of 3 to preserve frame
-#  this will effectively delete 1-4 amino acids per adjustment
-        for j in range(0,len(genes[gene].transcript[rec].exons)):
+#  this will effectively delete up to 4 amino acids per adjustment (max if intron len was 1)
+        for j in range(0,len(genes[entry].transcript[rec].exons)):
             try:
-                dist = (int(genes[gene].transcript[rec].exons[j+1].start)
-                        - int(genes[gene].transcript[rec].exons[j].stop))
+                dist = (int(genes[entry].transcript[rec].exons[j+1].start)
+                        - int(genes[entry].transcript[rec].exons[j].stop))
                 while dist < 11: # if use 'while dist < 10:' then too-small introns remain...
                     dist += 3
-                    genes[gene].transcript[rec].exons[j+1].start = str(int(genes[gene].transcript[rec].exons[j+1].start) + 3)
-
+                    genes[entry].transcript[rec].exons[j+1].start = str(int(
+                                genes[entry].transcript[rec].exons[j+1].start) + 3)
                     # adjust the corresponding CDS start too
                     try:
-                        for segment in range(0,len(genes[gene].transcript[rec].cds)):
-                            if genes[gene].transcript[rec].exons[j+1].start == genes[gene].transcript[rec].cds[segment].start:
-                                genes[gene][transcript].cds[segment].start = str(int(genes[gene].transcript[rec].cds[segment].start) + 3)
+                        for segment in range(0,len(genes[entry].transcript[rec].cds)):
+                            if (genes[entry].transcript[rec].exons[j+1].start == 
+                                    genes[entry].transcript[rec].cds[segment].start):
+                                genes[entry][transcript].cds[segment].start = str(int(genes[entry].transcript[rec].cds[segment].start) + 3)
                     except:
                         continue
             except:
                 continue
+    # make sure gene coordinates agree with new exons by setting them to the outermost
+    # coordinates of all the transcripts
+    for rec in genes[entry].transcript:
+        estarts = set()
+        eends = set()
+        for segment in range(0,len(genes[entry].transcript[rec].exons)):
+            estarts.add(int(genes[entry].transcript[rec].exons[segment].start))
+            eends.add(int(genes[entry].transcript[rec].exons[segment].end))
+        genes[entry].gene.start = str(min(estarts))
+        genes[entry].gene.end = str(max(eends))
+
+###################
 
 # TODO append locus id
 # TODO add annotations
@@ -211,19 +230,37 @@ scafs = set()
 for rec in genes:
     if genes[rec].gene.seqid not in scafs:
         tblout.write("".join([">FEATURE ",genes[rec].gene.seqid,"\n"]))
-        tblout.write("\t".join(["1",str(len(genome[genes[rec].gene.seqid])),"REFERENCE\n"]))
+        tblout.write("\t".join(["1",str(len(genome[genes[rec].gene.seqid])),
+                                        "REFERENCE\n"]))
         tblout.write("\t".join(["\t\t\tPBARC","12345\n"]))
         scafs.add(genes[rec].gene.seqid)
 
     tblout.write(str(genes[rec].print_gene()))
 
-    for prod in genes[rec].transcript:
+    # sort each gene's transcripts by name
+    for prod in sorted(genes[rec].transcript.keys()):
         try:
-            tblout.write(str(genes[rec].transcript[prod].print_transcript()))
+            tblout.write(str(genes[rec].transcript[prod].print_transcript(
+                        product_type = genes[rec].transcript[prod].transcript.type,
+                        outform = 'tbl')))
         except:
-            print str(genes[rec].transcript[prod].transcript.id)
+            print "Failed to write out "+str(genes[rec].transcript[prod].transcript.id)
 
 tblout.close
+
+# output (repaired) gff lines
+for rec in genes:
+    gffout.write(str(genes[rec].print_gene(outform = 'gff')))
+
+    for prod in sorted(genes[rec].transcript.keys()):
+        try:
+            gffout.write(str(genes[rec].transcript[prod].print_transcript(
+                        product_type = genes[rec].transcript[prod].transcript.type,
+                        outform = 'gff')))
+        except:
+            print "Failed to write out "+str(genes[rec].transcript[prod].transcript.id)
+
+gffout.close
 
 ## prepare edited gff lines for output
 ## GAG take cares of the transcript and protein ID
