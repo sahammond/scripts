@@ -227,7 +227,7 @@ with open(ref,"r") as file_object:
 
 # output tbl lines
 scafs = set()
-for rec in genes:
+for rec in sorted(genes):
     if genes[rec].gene.seqid not in scafs:
         tblout.write("".join([">FEATURE ",genes[rec].gene.seqid,"\n"]))
         tblout.write("\t".join(["1",str(len(genome[genes[rec].gene.seqid])),
@@ -249,7 +249,7 @@ for rec in genes:
 tblout.close
 
 # output (repaired) gff lines
-for rec in genes:
+for rec in sorted(genes):
     gffout.write(str(genes[rec].print_gene(outform = 'gff')))
 
     for prod in sorted(genes[rec].transcript.keys()):

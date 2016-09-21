@@ -17,10 +17,9 @@ class GFF(object):
 
     """Custom class to hold GFF features.
 
-    Stores each column whole in objects, and also
-    breaks out common attributes into their own
-    objects. Initializes slots for certain optional
-    attributes too.
+    Stores each column whole in objects, and also breaks out common
+    attributes into their own objects. Initializes slots for certain
+    optional attributes too.
 
     feature: a raw gff line (with tab chars, newline, etc.)
     """
@@ -65,8 +64,21 @@ class Transcript(object):
 
     """Custom class to hold GFF transcript features.
 
-    Stores the exons and cds in lists by position. Note that if the feature is on the
-    negative strand then they will need to be printed out in reverse order.
+    Stores the exons and cds in lists by position. Note that if the
+    feature is on the negative strand then they will need to be
+    printed out in reverse order.
+
+    Methods:
+    add_exon
+    add_cds
+    check_start_stop
+    check_5prime_partial_mrna
+    check_3prime_partial_mrna
+    print_single_seg
+    print_internal_seg
+    print_first_seg
+    print_last_seg
+    print_transcript
 
     """
 
@@ -106,8 +118,8 @@ class Transcript(object):
     def check_start_stop(self,sequence):
         """Check for start and stop codons.
 
-        Check if a sequence begins with ATG and ends with TAA, TGA, or TAG
-        Returns tuple of start - stop as Bools: (T|F,T|F)
+        Check if a sequence begins with ATG and ends with TAA, TGA,
+        or TAG. Returns tuple of start - stop as Bools: (T|F,T|F)
 
         """
         starts = ['ATG']
@@ -125,7 +137,7 @@ class Transcript(object):
         self.stop_complete = stopc
 
 
-    def check_5prime_partial_mrna(self,feature):
+    def check_5prime_partial_mrna(self):
         """Apply NCBI's partial marks to a segment, if applicable.
 
         NCBI's rules are basically that an mRNA is incomplete if it
@@ -134,20 +146,17 @@ class Transcript(object):
         the mRNA is 5' incomplete. Likewise, if the last exon's
         end is the same as the last CDS segment's, then it's 3'
         incomplete.
+        If there is no CDS, treat the (noncoding) transcript as partial.
 
         """
-        # if there are no CDS, there can be no check
-        if len(self.cds) < 1:
-            return feature
+        if not self.cds:
+            self.exons[0].start = "<" +self.exons[0].start
         else:
             if int(self.exons[0].start) == int(self.cds[0].start):
-                feature.start = "<"+feature.start
-                return feature
-            else:
-                return feature
+                self.exons[0].start = "<" +self.exons[0].start
 
 
-    def check_3prime_partial_mrna(self,feature):
+    def check_3prime_partial_mrna(self):
         """Apply NCBI's partial marks to a segment, if applicable.
 
         NCBI's rules are basically that an mRNA is incomplete if it
@@ -156,17 +165,14 @@ class Transcript(object):
         the mRNA is 5' incomplete. Likewise, if the last exon's
         end is the same as the last CDS segment's, then it's 3'
         incomplete.
+        If there is no CDS, treat the (noncoding) transcript as partial.
 
         """
-        # if there are no CDS, there can be no check
-        if len(self.cds) < 1:
-            return feature
+        if not self.cds:
+            self.exons[-1].end = ">"+self.exons[-1].end
         else:
-            if int(self.exons[-1].start) == int(self.cds[-1].start):
-                feature.start = ">"+feature.start
-                return feature
-            else:
-                return feature
+            if int(self.exons[-1].end) == int(self.cds[-1].end):
+                self.exons[-1].end = ">"+self.exons[-1].end
 
 
     def print_single_seg(self,feature,product_type=None,outform=None):
@@ -182,7 +188,7 @@ class Transcript(object):
             product_type = 'mRNA'
         if outform == 'gff':
             return feature.raw
-        # TODO handle incomplete first seg
+        # TODO handle incomplete CDS
         elif outform == 'tbl':
             outbuff = []
             if feature.type == "exon":
@@ -262,7 +268,7 @@ class Transcript(object):
             product_type = 'mRNA'
         if outform == 'gff':
             return feature.raw
-        # TODO handle incomplete first seg
+        # TODO handle incomplete CDS
         elif outform == 'tbl':
             outbuff = []
             if feature.type == "exon":
@@ -279,7 +285,7 @@ class Transcript(object):
             elif feature.type == "CDS":
                 if feature.strand == "-":
                     outbuff.append("\t".join([feature.end,feature.start,"CDS"]))
-                if feature.strand == "+": ###
+                if feature.strand == "+":
                     outbuff.append("\t".join([feature.start,feature.end,"CDS"]))
 
             return "\n".join(outbuff)
@@ -298,7 +304,7 @@ class Transcript(object):
             product_type = 'mRNA'
         if outform == 'gff':
             return feature.raw
-        # TODO handle incomplete first seq
+        # TODO handle incomplete CDS
         elif outform == 'tbl':
             outbuff = []
             if feature.type == "exon":
@@ -361,6 +367,8 @@ class Transcript(object):
 
             return "\n".join(outbuff)
         elif outform == 'tbl':
+            self.check_5prime_partial_mrna()
+            self.check_3prime_partial_mrna()
             outbuff = []
             if len(self.exons) == 1:
                 return self.print_single_seg(self.exons[0],product_type,outform)
@@ -431,7 +439,6 @@ class Transcript(object):
                                 outbuff.append(self.print_last_seg(self.cds[-1],
                                                 product_type,outform))
 
-            #print "\n".join(outbuff)
             return "\n".join(outbuff)
 
 
@@ -450,32 +457,14 @@ class Gene(object):
 
     gene:   a GFF object with type 'gene'
 
-    Stores strand, type (mRNA, ncRNA, etc.), and transcripts. For each transcript,
-    the exons, cds, and whether the cds is complete (at either end) can be added.
-    The latter info is via the check_start_stop method, which requires a sequence string.
+    Stores transcripts as Transcript objects via the add_transcript
+    method.
 
+    Methods:
+    add_transcript
+    print_gene
+        
     """
-
-    def check_start_stop(self,sequence):
-        """Check for start and stop codons.
-
-        Check if a sequence begins with ATG and ends with TAA, TGA, or TAG
-        Returns tuple of start - stop as Bools: (T|F,T|F)
-
-        """
-        starts = ['ATG']
-        stops = ['TAA','TGA','TAG']
-
-        startc = False
-        stopc = False
-
-        if sequence[0:3] in starts:
-            startc = True
-        if sequence[-3:] in stops:
-            stopc = True
-
-        self.start_complete = startc
-        self.stop_complete = stopc
 
 
     def add_transcript(self,feature,f=0):
@@ -489,7 +478,7 @@ class Gene(object):
         else:
             self.transcript[feature.id] = Transcript(feature)
 
-
+    # TODO gene is incomplete if (left and/or right-most?) transcript is incomplete
     def print_gene(self,outform=None):
         """Print a gene line.
 
@@ -517,7 +506,6 @@ class Gene(object):
                     outbuff.append("".join([self.gene.start,"\t",self.gene.end,"\tgene\n",
                                     "\t\t\tlocus_id\t",self.gene.id,"\n"]))
 
-            #print "\n".join(outbuff)
             return "\n".join(outbuff)
 
     def __init__(self,gene):
@@ -525,6 +513,5 @@ class Gene(object):
         self.id = gene.id
         self.transcript = {}
 
-# TODO mangage incompleteness
 
 ### EOF ###
