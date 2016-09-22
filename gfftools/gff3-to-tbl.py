@@ -227,6 +227,7 @@ with open(ref,"r") as file_object:
 
 # output tbl lines
 scafs = set()
+# order genes by ID; hopefully this corresponds to their position on the scaffold
 for rec in sorted(genes):
     if genes[rec].gene.seqid not in scafs:
         tblout.write("".join([">FEATURE ",genes[rec].gene.seqid,"\n"]))
@@ -242,7 +243,7 @@ for rec in sorted(genes):
         try:
             tblout.write(str(genes[rec].transcript[prod].print_transcript(
                         product_type = genes[rec].transcript[prod].transcript.type,
-                        outform = 'tbl')))
+                        outform = 'tbl',sequence=genome[genes[rec].gene.seqid])))
         except:
             print "Failed to write out "+str(genes[rec].transcript[prod].transcript.id)
 

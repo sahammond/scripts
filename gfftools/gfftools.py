@@ -12,6 +12,7 @@ Transcript: object to hold exons, cds, and info associated with a
 """
 
 import re
+import fastatools
 
 class GFF(object):
 
@@ -71,9 +72,10 @@ class Transcript(object):
     Methods:
     add_exon
     add_cds
-    check_start_stop
-    check_5prime_partial_mrna
-    check_3prime_partial_mrna
+    check_start
+    check_stop
+    check_fiveprime_complete
+    check_threeprime_complete
     print_single_seg
     print_internal_seg
     print_first_seg
@@ -115,29 +117,29 @@ class Transcript(object):
                         break
 
 
-    def check_start_stop(self,sequence):
-        """Check for start and stop codons.
+    def check_start(self,sequence):
+        """Check for start codons.
 
-        Check if a sequence begins with ATG and ends with TAA, TGA,
-        or TAG. Returns tuple of start - stop as Bools: (T|F,T|F)
+        Check if a sequence begins with ATG and return True or False 
 
         """
         starts = ['ATG']
-        stops = ['TAA','TGA','TAG']
-
-        startc = False
-        stopc = False
-
         if sequence[0:3] in starts:
-            startc = True
+            self.start_complete = True
+
+
+    def check_stop(self,sequence):
+        """Check for stop codons.
+
+        Check if a sequence ends with TAA, TGA, or TAG. Return True or False.
+
+        """
+        stops = ['TAA','TGA','TAG']
         if sequence[-3:] in stops:
-            stopc = True
-
-        self.start_complete = startc
-        self.stop_complete = stopc
+            self.stop_complete = True
 
 
-    def check_5prime_partial_mrna(self):
+    def check_fiveprime_complete(self):
         """Apply NCBI's partial marks to a segment, if applicable.
 
         NCBI's rules are basically that an mRNA is incomplete if it
@@ -150,13 +152,19 @@ class Transcript(object):
 
         """
         if not self.cds:
-            self.exons[0].start = "<" +self.exons[0].start
+            self.exons[0].start = "<" + self.exons[0].start
+            self.fiveprime_checked = True
+            self.fiveprime_complete = False
         else:
-            if int(self.exons[0].start) == int(self.cds[0].start):
-                self.exons[0].start = "<" +self.exons[0].start
+            if (int(re.sub("[<>]","",self.exons[0].start)) 
+                == int(re.sub("[<>]","",self.cds[0].start))):
+                self.exons[0].start = "<" + self.exons[0].start
+                self.fiveprime_complete = False
+            self.fiveprime_checked = True
+            
 
 
-    def check_3prime_partial_mrna(self):
+    def check_threeprime_complete(self):
         """Apply NCBI's partial marks to a segment, if applicable.
 
         NCBI's rules are basically that an mRNA is incomplete if it
@@ -169,10 +177,15 @@ class Transcript(object):
 
         """
         if not self.cds:
-            self.exons[-1].end = ">"+self.exons[-1].end
+            self.exons[-1].end = ">" + self.exons[-1].end
+            self.threeprime_checked = True
+            self.threeprime_complete = False
         else:
-            if int(self.exons[-1].end) == int(self.cds[-1].end):
-                self.exons[-1].end = ">"+self.exons[-1].end
+            if (int(re.sub("[<>]","",self.exons[-1].end))
+                == int(re.sub("[<>]","",self.cds[-1].end))):
+                self.exons[-1].end = ">" + self.exons[-1].end
+                self.threeprime_complete = False
+            self.threeprime_checked = True
 
 
     def print_single_seg(self,feature,product_type=None,outform=None):
@@ -188,7 +201,6 @@ class Transcript(object):
             product_type = 'mRNA'
         if outform == 'gff':
             return feature.raw
-        # TODO handle incomplete CDS
         elif outform == 'tbl':
             outbuff = []
             if feature.type == "exon":
@@ -268,7 +280,6 @@ class Transcript(object):
             product_type = 'mRNA'
         if outform == 'gff':
             return feature.raw
-        # TODO handle incomplete CDS
         elif outform == 'tbl':
             outbuff = []
             if feature.type == "exon":
@@ -304,7 +315,6 @@ class Transcript(object):
             product_type = 'mRNA'
         if outform == 'gff':
             return feature.raw
-        # TODO handle incomplete CDS
         elif outform == 'tbl':
             outbuff = []
             if feature.type == "exon":
@@ -343,11 +353,13 @@ class Transcript(object):
 
             return "\n".join(outbuff)
 
-    def print_transcript(self,product_type=None,outform=None):
+
+    def print_transcript(self,product_type=None,outform=None,sequence=None):
         """Print a transcript with exons (and cds segments).
 
         product_type = 'mRNA' or 'ncRNA'
         outform = 'gff' or 'tbl'
+        sequence = genomic scaffold sequence (for CDS completeness assessment)
 
         """
         if outform is None:
@@ -365,17 +377,22 @@ class Transcript(object):
                 for segment in self.cds:
                     outbuff.append(segment.raw)
 
-            return "\n".join(outbuff)
+            return "".join(outbuff)
         elif outform == 'tbl':
-            self.check_5prime_partial_mrna()
-            self.check_3prime_partial_mrna()
+            # check if the transcript is complete, if it hasn't been checked already.
+            if not self.fiveprime_checked:
+                self.check_fiveprime_complete()
+#                self.fiveprime_checked = True
+            if not self.threeprime_checked:
+                self.check_threeprime_complete()
+#                self.threeprime_checked = True
             outbuff = []
             if len(self.exons) == 1:
                 return self.print_single_seg(self.exons[0],product_type,outform)
             if len(self.exons) > 1:
                 if self.strand == "-":
                     if len(self.exons) == 2:
-                        outbuff.append(self.print_first_seg(self.exons[1],product_type,
+                        outbuff.append(self.print_first_seg(self.exons[-1],product_type,
                                         outform))
                         outbuff.append(self.print_last_seg(self.exons[0],product_type,
                                         outform))
@@ -392,7 +409,7 @@ class Transcript(object):
                     if len(self.exons) == 2:
                         outbuff.append(self.print_first_seg(self.exons[0],product_type,
                                         outform))
-                        outbuff.append(self.print_last_seg(self.exons[1],product_type,
+                        outbuff.append(self.print_last_seg(self.exons[-1],product_type,
                                         outform))
                     if len(self.exons) > 2:
                         outbuff.append(self.print_first_seg(self.exons[0],product_type,
@@ -404,13 +421,30 @@ class Transcript(object):
                             outbuff.append(self.print_last_seg(self.exons[-1],
                                             product_type,outform))
             if self.cds:
+                # check for start and stop codons
+                if sequence:
+                    # do the checks if they haven't been done yet (assume if start
+                    #   unset then stop isn't either)
+                    # will also be re-checked if is incomplete... # TODO do check better
+                    if not self.start_complete and not self.stop_complete:
+                        if self.strand == "-":
+                            # correct for difference in 0-based Python and 1-based gff3
+                            self.check_start(fastatools.revcomp(sequence[int(self.cds[-1].end)-3:int(self.cds[-1].end)]))
+                            self.check_stop(fastatools.revcomp(sequence[int(self.cds[0].start)-1:int(self.cds[0].start)+2]))
+                        if self.strand == "+":
+                            self.check_start(sequence[int(self.cds[0].start)-1:])
+                            self.check_stop(sequence[:int(self.cds[-1].end)+1])
+                        if not self.start_complete:
+                            self.cds[0].start = "<" + self.cds[0].start
+                        if not self.stop_complete:
+                            self.cds[-1].end = ">" + self.cds[-1].end
                 if len(self.cds) == 1:
                     outbuff.append(self.print_single_seg(self.cds[0],product_type,
                                     outform))
                 if len(self.cds) > 1:
                     if self.strand == "-":
                         if len(self.cds) == 2:
-                            outbuff.append(self.print_first_seg(self.cds[1],
+                            outbuff.append(self.print_first_seg(self.cds[-1],
                                             product_type,outform))
                             outbuff.append(self.print_last_seg(self.cds[0],product_type,
                                             outform))
@@ -427,7 +461,7 @@ class Transcript(object):
                         if len(self.cds) == 2:
                             outbuff.append(self.print_first_seg(self.cds[0],product_type,
                                             outform))
-                            outbuff.append(self.print_last_seg(self.cds[1],product_type,
+                            outbuff.append(self.print_last_seg(self.cds[-1],product_type,
                                             outform))
                         if len(self.cds) > 2:
                             outbuff.append(self.print_first_seg(self.cds[0],product_type,
@@ -447,8 +481,13 @@ class Transcript(object):
         self.transcript = feature
         self.exons = []
         self.cds = []
-        self.start_complete = ''
-        self.stop_complete = ''
+        # five or three prime complete set to false if fails check
+        self.fiveprime_complete = True
+        self.fiveprime_checked = False
+        self.threeprime_complete = True
+        self.threeprime_checked = False
+        self.start_complete = False
+        self.stop_complete = False
 
 
 class Gene(object):
@@ -466,7 +505,6 @@ class Gene(object):
         
     """
 
-
     def add_transcript(self,feature,f=0):
         """Add a transcript GFF object to the gene.
 
@@ -478,11 +516,12 @@ class Gene(object):
         else:
             self.transcript[feature.id] = Transcript(feature)
 
+
     # TODO gene is incomplete if (left and/or right-most?) transcript is incomplete
     def print_gene(self,outform=None):
         """Print a gene line.
 
-        Format = 'gff' or 'tbl'
+        outform = 'gff' or 'tbl'
 
         """
         if outform is None:
@@ -490,6 +529,32 @@ class Gene(object):
         if outform == 'gff':
             return self.gene.raw
         elif outform == 'tbl':
+            # check gene completeness
+            # gene is incomplete if left and/or right-most transcript(s) incomplete
+            starts = []
+            stops = []
+            for i in self.transcript:
+                starts.append((int(self.transcript[i].transcript.start),
+                    self.transcript[i].transcript.id))
+                stops.append((int(self.transcript[i].transcript.end),
+                    self.transcript[i].transcript.id))
+            starts.sort(key = lambda x: x[0]) # smallest first
+            stops.sort(key = lambda x: x[0],reverse = True) # largest first
+            if not self.transcript[starts[0][1]].fiveprime_checked:
+                self.transcript[starts[0][1]].check_fiveprime_complete()
+#                self.transcript[starts[0][1]].fiveprime_checked = True
+            self.fiveprime_complete = self.transcript[starts[0][1]].fiveprime_complete
+            self.fiveprime_checked = True
+            if not self.fiveprime_complete:
+                self.gene.start = "<" + self.gene.start
+            if not self.transcript[stops[0][1]].threeprime_checked:
+                self.transcript[stops[0][1]].check_threeprime_complete()
+ #               self.transcript[stops[0][1]].threeprime_checked = True
+            self.threeprime_complete = self.transcript[stops[0][1]].threeprime_complete
+            self.threeprime_checked = True
+            if not self.threeprime_complete:
+                self.gene.end = ">" + self.gene.end
+
             outbuff = []
             if self.gene.strand == "-":
                 if self.gene.locusid:
@@ -512,6 +577,10 @@ class Gene(object):
         self.gene = gene
         self.id = gene.id
         self.transcript = {}
+        self.fiveprime_complete = True
+        self.fiveprime_checked = False
+        self.threeprime_complete = True
+        self.threeprime_checked = False
 
 
 ### EOF ###
