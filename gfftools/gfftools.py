@@ -432,8 +432,8 @@ class Transcript(object):
                             self.check_start(fastatools.revcomp(sequence[int(self.cds[-1].end)-3:int(self.cds[-1].end)]))
                             self.check_stop(fastatools.revcomp(sequence[int(self.cds[0].start)-1:int(self.cds[0].start)+2]))
                         if self.strand == "+":
-                            self.check_start(sequence[int(self.cds[0].start)-1:])
-                            self.check_stop(sequence[:int(self.cds[-1].end)+1])
+                            self.check_start(sequence[int(self.cds[0].start)-1:int(self.cds[0].start)+2])
+                            self.check_stop(sequence[int(self.cds[-1].end)-3:int(self.cds[-1].end)])
                         if not self.start_complete:
                             self.cds[0].start = "<" + self.cds[0].start
                         if not self.stop_complete:
@@ -559,17 +559,17 @@ class Gene(object):
             if self.gene.strand == "-":
                 if self.gene.locusid:
                     outbuff.append("".join([self.gene.end,"\t",self.gene.start,"\tgene\n",
-                                    "\t\t\tlocus_id\t",self.gene.locusid,"\n"]))
+                                    "\t\t\tlocus_tag\t",self.gene.locusid,"\n"]))
                 else:
                     outbuff.append("".join([self.gene.end,"\t",self.gene.start,"\tgene\n",
-                                    "\t\t\tlocus_id\t",self.gene.id,"\n"]))
+                                    "\t\t\tlocus_tag\t",self.gene.id,"\n"]))
             if self.gene.strand == "+":
                 if self.gene.locusid:
                     outbuff.append("".join([self.gene.start,"\t",self.gene.end,"\tgene\n",
-                                    "\t\t\tlocus_id\t",self.gene.locusid,"\n"]))
+                                    "\t\t\tlocus_tag\t",self.gene.locusid,"\n"]))
                 else:
                     outbuff.append("".join([self.gene.start,"\t",self.gene.end,"\tgene\n",
-                                    "\t\t\tlocus_id\t",self.gene.id,"\n"]))
+                                    "\t\t\tlocus_tag\t",self.gene.id,"\n"]))
 
             return "\n".join(outbuff)
 

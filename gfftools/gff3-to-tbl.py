@@ -150,6 +150,9 @@ for entry in genes:
 # TODO add annotations
 # TODO make sure gene and mrna boundaries agree with each other and
 #   constituent exons
+###################
+
+### OLD CODE
 #for i in scarfs:
 #
 #    scarfs[i].sort(key=lambda q: q[0])
@@ -230,7 +233,7 @@ scafs = set()
 # order genes by ID; hopefully this corresponds to their position on the scaffold
 for rec in sorted(genes):
     if genes[rec].gene.seqid not in scafs:
-        tblout.write("".join([">FEATURE ",genes[rec].gene.seqid,"\n"]))
+        tblout.write("".join([">Feature ",genes[rec].gene.seqid,"\n"]))
         tblout.write("\t".join(["1",str(len(genome[genes[rec].gene.seqid])),
                                         "REFERENCE\n"]))
         tblout.write("\t".join(["\t\t\tPBARC","12345\n"]))
@@ -263,6 +266,7 @@ for rec in sorted(genes):
 
 gffout.close
 
+#### OLD CODE
 ## prepare edited gff lines for output
 ## GAG take cares of the transcript and protein ID
 #for i in mrna:
