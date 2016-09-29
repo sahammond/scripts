@@ -46,20 +46,26 @@ class GFF(object):
         self.name = ""
         self.note = ""
         self.incomplete = ""
+        self.target = ""
+        self.trailing = ""
 
         for entry in attr:
-            if len(re.findall("ID=",entry)) > 0:
+            if re.findall("ID=",entry):
                 self.id = re.sub("ID=","",entry)
-            elif len(re.findall("Parent=",entry)) > 0:
+            elif re.findall("Parent=",entry):
                 # some features have > 1 parent, sep by ","
                 self.parent = re.sub("Parent=","",entry).split(",")
-            elif len(re.findall("product=",entry)) > 0:
+            elif re.findall("product=",entry):
                 self.product = re.sub("product=","",entry)
-            elif len(re.findall("Name=",entry)) > 0:
+            elif re.findall("Name=",entry):
                 self.name = re.sub("Name=","",entry)
-            elif len(re.findall("note=",entry)) > 0:
+            elif re.findall("note=",entry):
                 self.note = re.sub("note=","",entry)
-
+            elif re.findall("Target=",entry):
+                _unspl = re.sub("Target=","",entry).split(" ")
+                self.target = _unspl[0]
+                if len(_unspl) > 1:
+                    self.trailing = _unspl[1:]
 
 class Transcript(object):
 
@@ -152,16 +158,24 @@ class Transcript(object):
 
         """
         if not self.cds:
-            self.exons[0].start = "<" + self.exons[0].start
+            if self.transcript.strand == "+":
+                self.exons[0].start = "<" + self.exons[0].start
+            if self.transcript.strand == "-":
+                self.exons[-1].end = "<" + self.exons[-1].end
             self.fiveprime_checked = True
             self.fiveprime_complete = False
         else:
-            if (int(re.sub("[<>]","",self.exons[0].start)) 
-                == int(re.sub("[<>]","",self.cds[0].start))):
-                self.exons[0].start = "<" + self.exons[0].start
-                self.fiveprime_complete = False
+            if self.transcript.strand == "+":
+                if (int(re.sub("[<>]","",self.exons[0].start)) 
+                    == int(re.sub("[<>]","",self.cds[0].start))):
+                    self.exons[0].start = "<" + self.exons[0].start
+                    self.fiveprime_complete = False
+            if self.transcript.strand == "-":
+                if (int(re.sub("[<>]","",self.exons[-1].end)) 
+                    == int(re.sub("[<>]","",self.cds[-1].end))):
+                    self.exons[-1].end = "<" + self.exons[-1].end
+                    self.fiveprime_complete = False
             self.fiveprime_checked = True
-            
 
 
     def check_threeprime_complete(self):
@@ -177,14 +191,23 @@ class Transcript(object):
 
         """
         if not self.cds:
-            self.exons[-1].end = ">" + self.exons[-1].end
+            if self.transcript.strand == "+":
+                self.exons[-1].end = ">" + self.exons[-1].end
+            if self.transcript.strand == "-":
+                self.exons[0].start = ">" + self.exons[0].start
             self.threeprime_checked = True
             self.threeprime_complete = False
         else:
-            if (int(re.sub("[<>]","",self.exons[-1].end))
-                == int(re.sub("[<>]","",self.cds[-1].end))):
-                self.exons[-1].end = ">" + self.exons[-1].end
-                self.threeprime_complete = False
+            if self.transcript.strand == "+":
+                if (int(re.sub("[<>]","",self.exons[-1].end))
+                    == int(re.sub("[<>]","",self.cds[-1].end))):
+                    self.exons[-1].end = ">" + self.exons[-1].end
+                    self.threeprime_complete = False
+            if self.transcript.strand == "-":
+                if (int(re.sub("[<>]","",self.exons[0].start))
+                    == int(re.sub("[<>]","",self.cds[0].start))):
+                    self.exons[0].start = ">" + self.exons[0].start
+                    self.threeprime_complete = False
             self.threeprime_checked = True
 
 
@@ -215,19 +238,26 @@ class Transcript(object):
                     elif product_type == "ncRNA":
                         outbuff.append("\t".join([feature.start,feature.end,"ncRNA"]))
                 if product_type == "ncRNA":
-                    outbuff.append("\t\t\tncRNA_class\tlncRNA")
+                    outbuff.append("\t\t\tncRNA_class\tlncRNA\n")
                 if self.transcript.product:
-                    outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
+                    if re.findall("similar",self.transcript.product):
+                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
+#                        outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
+                    else:
+                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
                 if self.transcript.note:
                     outbuff.append("\t".join(["\t\t\tnote",self.transcript.note]))
                 if product_type == "mRNA":
                     outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
                                             feature.parent[0]]))
                     outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
-                                            feature.parent[0],"_mRNA\n"]))
+                                            feature.parent[0],"_mRNA"]))
+#                    outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
+#                                            feature.parent[0],"_mRNA\n"]))
                 if product_type == "ncRNA":
-                    outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
-                                            feature.parent[0],"_ncRNA\n"]))
+                    outbuff.append("\n") ###
+#                    outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
+#                                            feature.parent[0],"_ncRNA\n"]))
             elif feature.type == "CDS":
                 if feature.strand == "-":
                     outbuff.append("\t".join([feature.end,feature.start,"CDS"]))
@@ -235,7 +265,11 @@ class Transcript(object):
                     outbuff.append("\t".join([feature.start,feature.end,"CDS"]))
 
                 if self.transcript.product:
-                    outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
+                    if re.findall("similar",self.transcript.product):
+                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
+                        outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
+                    else:
+                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
                 if self.transcript.note:
                     outbuff.append("\t".join(["\t\t\tnote",self.transcript.note]))
 
@@ -323,25 +357,36 @@ class Transcript(object):
                 if feature.strand == "+":
                     outbuff.append("\t".join([feature.start,feature.end]))
                 if self.transcript.product:
-                    outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
+                    if re.findall("similar",self.transcript.product):
+                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
+#                        outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
+                    else:
+                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
                 if self.transcript.note:
                     outbuff.append("\t".join(["\t\t\tnote",self.transcript.note]))
                 if product_type == "mRNA":
                     outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
                                             feature.parent[0]]))
                     outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
-                                            feature.parent[0],"_mRNA\n"]))
+                                            feature.parent[0],"_mRNA"]))
+#                    outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
+#                                            feature.parent[0],"_mRNA\n"]))
                 if product_type == "ncRNA":
-                    outbuff.append("\t\t\tncRNA_class\tlncRNA")
-                    outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
-                                            feature.parent[0],"_ncRNA\n"]))
+#                    outbuff.append("\t\t\tncRNA_class\tlncRNA")
+                    outbuff.append("\t\t\tncRNA_class\tlncRNA\n")
+#                    outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
+#                                            feature.parent[0],"_ncRNA\n"]))
             elif feature.type == "CDS":
                 if feature.strand == "-":
                     outbuff.append("\t".join([feature.end,feature.start]))
                 if feature.strand == "+":
                     outbuff.append("\t".join([feature.start,feature.end]))
                 if self.transcript.product:
-                    outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
+                    if re.findall("similar",self.transcript.product):
+                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
+                        outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
+                    else:
+                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
                 if self.transcript.note:
                     outbuff.append("\t".join(["\t\t\tnote",self.transcript.note]))
 
@@ -431,13 +476,17 @@ class Transcript(object):
                             # correct for difference in 0-based Python and 1-based gff3
                             self.check_start(fastatools.revcomp(sequence[int(self.cds[-1].end)-3:int(self.cds[-1].end)]))
                             self.check_stop(fastatools.revcomp(sequence[int(self.cds[0].start)-1:int(self.cds[0].start)+2]))
+                            if not self.start_complete:
+                                self.cds[-1].end = "<" + self.cds[-1].end
+                            if not self.stop_complete:
+                                self.cds[0].start = ">" + self.cds[0].start
                         if self.strand == "+":
                             self.check_start(sequence[int(self.cds[0].start)-1:int(self.cds[0].start)+2])
                             self.check_stop(sequence[int(self.cds[-1].end)-3:int(self.cds[-1].end)])
-                        if not self.start_complete:
-                            self.cds[0].start = "<" + self.cds[0].start
-                        if not self.stop_complete:
-                            self.cds[-1].end = ">" + self.cds[-1].end
+                            if not self.start_complete:
+                                self.cds[0].start = "<" + self.cds[0].start
+                            if not self.stop_complete:
+                                self.cds[-1].end = ">" + self.cds[-1].end
                 if len(self.cds) == 1:
                     outbuff.append(self.print_single_seg(self.cds[0],product_type,
                                     outform))
@@ -540,20 +589,64 @@ class Gene(object):
                     self.transcript[i].transcript.id))
             starts.sort(key = lambda x: x[0]) # smallest first
             stops.sort(key = lambda x: x[0],reverse = True) # largest first
-            if not self.transcript[starts[0][1]].fiveprime_checked:
-                self.transcript[starts[0][1]].check_fiveprime_complete()
-#                self.transcript[starts[0][1]].fiveprime_checked = True
-            self.fiveprime_complete = self.transcript[starts[0][1]].fiveprime_complete
-            self.fiveprime_checked = True
-            if not self.fiveprime_complete:
-                self.gene.start = "<" + self.gene.start
-            if not self.transcript[stops[0][1]].threeprime_checked:
-                self.transcript[stops[0][1]].check_threeprime_complete()
- #               self.transcript[stops[0][1]].threeprime_checked = True
-            self.threeprime_complete = self.transcript[stops[0][1]].threeprime_complete
-            self.threeprime_checked = True
-            if not self.threeprime_complete:
-                self.gene.end = ">" + self.gene.end
+            if self.gene.strand == "+":
+#                if self.transcript[starts[0][1]].cds:
+#                    if (int(re.sub("[<>]","",self.transcript[starts[0][1]].exons[0].start)) 
+#                        == int(re.sub("[<>]","",self.transcript[starts[0][1]].cds[0].start))):
+#                        self.gene.start = "<" + self.gene.start
+#                        self.fiveprime_complete = False
+#                        self.fiveprime_checked = True
+#                    if (int(re.sub("[<>]","",self.transcript[stops[0][1]].exons[-1].end))
+#                        == int(re.sub("[<>]","",self.transcript[stops[0][1]].cds[-1].end))):
+#                        self.gene.end = ">" + self.gene.end
+#                        self.threeprime_complete = False
+#                        self.threeprime_checked = True
+#                else:
+#                    self.fiveprime_complete = False
+#                    self.fiveprime_checked = True
+#                    self.threeprime_complete = False
+#                    self.threeprime_checked = True
+                if not self.transcript[starts[0][1]].fiveprime_checked:
+                    self.transcript[starts[0][1]].check_fiveprime_complete()
+                self.fiveprime_complete = self.transcript[starts[0][1]].fiveprime_complete
+                self.fiveprime_checked = True
+                if not self.transcript[stops[0][1]].threeprime_checked:
+                    self.transcript[stops[0][1]].check_threeprime_complete()
+                self.threeprime_complete = self.transcript[stops[0][1]].threeprime_complete
+                self.threeprime_checked = True
+                if not self.fiveprime_complete:
+                    self.gene.start = "<" + self.gene.start
+                if not self.threeprime_complete:
+                    self.gene.end = ">" + self.gene.end
+            if self.gene.strand == "-":
+#                if self.transcript[starts[0][1]].cds:
+#                    if (int(re.sub("[<>]","",self.transcript[starts[0][1]].exons[0].start)) 
+#                        == int(re.sub("[<>]","",self.transcript[starts[0][1]].cds[0].start))):
+#                        self.gene.start = ">" + self.gene.start
+#                        self.threeprime_complete = False
+#                        self.threeprime_checked = True
+#                    if (int(re.sub("[<>]","",self.transcript[stops[0][1]].exons[-1].end))
+#                        == int(re.sub("[<>]","",self.transcript[stops[0][1]].cds[-1].end))):
+#                        self.gene.end = "<" + self.gene.end
+#                        self.fiveprime_complete = False
+#                        self.fiveprime_checked = True
+#                else:
+#                    self.fiveprime_complete = False
+#                    self.fiveprime_checked = True
+#                    self.threeprime_complete = False
+#                    self.threeprime_checked = True
+                if not self.transcript[stops[0][1]].fiveprime_checked:
+                    self.transcript[stops[0][1]].check_fiveprime_complete()
+                self.fiveprime_complete = self.transcript[stops[0][1]].fiveprime_complete
+                self.fiveprime_checked = True
+                if not self.transcript[starts[0][1]].threeprime_checked:
+                    self.transcript[starts[0][1]].check_threeprime_complete()
+                self.threeprime_complete = self.transcript[starts[0][1]].threeprime_complete
+                self.threeprime_checked = True
+                if not self.fiveprime_complete:
+                    self.gene.end = "<" + self.gene.end
+                if not self.threeprime_complete:
+                    self.gene.start = ">" + self.gene.start
 
             outbuff = []
             if self.gene.strand == "-":

@@ -135,14 +135,14 @@ for entry in genes:
                 continue
     # make sure gene coordinates agree with new exons by setting them to the outermost
     # coordinates of all the transcripts
+    estarts = set()
+    eends = set()
     for rec in genes[entry].transcript:
-        estarts = set()
-        eends = set()
         for segment in range(0,len(genes[entry].transcript[rec].exons)):
-            estarts.add(int(genes[entry].transcript[rec].exons[segment].start))
-            eends.add(int(genes[entry].transcript[rec].exons[segment].end))
-        genes[entry].gene.start = str(min(estarts))
-        genes[entry].gene.end = str(max(eends))
+            estarts.add(int(re.sub("[<>]","",genes[entry].transcript[rec].exons[segment].start)))
+            eends.add(int(re.sub("[<>]","",genes[entry].transcript[rec].exons[segment].end)))
+    genes[entry].gene.start = str(min(estarts))
+    genes[entry].gene.end = str(max(eends))
 
 ###################
 
