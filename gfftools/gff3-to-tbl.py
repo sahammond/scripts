@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# usage: gff3-to-tbl.py genes.gff genome.fa
+# usage: gff3-to-tbl.py genes.gff genome.fa alignment.blastp
 
 import sys
 import re
@@ -13,52 +13,41 @@ import gfftools
 # parse arguments
 
 gff = sys.argv[1]
-#aln=s.argv[2]
-#ref=s.argv[3]
-ref = sys.argv[2]
+fasta = sys.argv[2]
+#aln=sys.argv[3] # TODO this part not working yet
 
 ############
 # declarations
 
-LOCUS="AB205" # NCBI-assigned locus_id
-LOCS=50 # start number for locus id iteration
-LOCW=7 # width for locus ids (i.e. total with padding)
-LOCJ=10 # jump size between loci (good idea to allow for genes identified between current ones)
-MIN_IDENT=25 # miniumum percent identity to accept alignment for annotation
-MIN_COV=50 # minimum percent coverage to accept alignment for annotation
-BRK='OS=' # string to split reference protein names with. Script expects swissprot-style protein names in reference.fa, use 'OS='
-SEPQ=' ' # query fasta title line field sep
-SEPR=' ' # reference fasta title line field sep
-SEPO=' ' # field sep for output fasta
-PRE='product=similar to' # string to prefix description with
-UNK='product=hypothetical protein' # label to give queries that have no good annotation
-ISOALPHA=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'] # alphabet to use for isoform labeling
-#CTAB=open('maker-to-ncbi-prep-ID-table.txt',"w") # file to write gene and mRNA conversion table to
-#SCAFL=len('Rc-01r160223s0000001') # length of your scaffold IDs. must be all the same. must be integer.
-
-############
-# declare empty objects
-
-#mrna={} # scaffold -> mRNA -> [exons],[cds]
-#seen=set() # set to track observed mRNA IDs
-#gene=[] # list of final modified gff lines
-#gseen=set() # set to track observed gene lines
-#gbound={} # keep the min and max positions across isoforms per gene
-#gscaff=set() # set to track observed genomic scaffold IDs
-#gseenagain=set() # another set to track observed gene lines
-#present=set() # set to track mRNA IDs ### how is it diff from 'seen'?
-#refnam={} # dict of reference descriptions
-#locflag=0 # flag to indicate first instance of locus ID
-#scarfseen=set() # set to track scaffolds as their gene boundaries are corrected
-#scarfs={} # dict to hold gene boundaries are they're ordered along the scaffolds
-#glocus={} # dict to hold gene info (scaffold,boundaries,locus_tag)
-#aseen=set() # set to track observed alignments
-#isog={} # dict to track total and 'observed' mRNA isoforms key = gene, value = number of assoc mrnas
+# NCBI-assigned locus_tag
+LOCUS="AB205"
+# start number for locus id iteration
+LOCS=50
+# width for locus ids (i.e. total with padding)
+LOCW=7
+# jump size between loci (good idea to allow for genes identified between current ones)
+LOCJ=10
+# miniumum percent identity to accept alignment for annotation
+MIN_IDENT=25
+# minimum percent coverage to accept alignment for annotation
+MIN_COV=50
+# string to split reference protein names with. Script expects swissprot-style protein
+#  names in reference.fa, use 'OS='
+BRK='OS=' 
+# field sep for product line
+SEPO=' '
+# string to prefix description with
+PRE='similar to'
+# label to give queries that have no good annotation
+UNK='hypothetical protein'
+# alphabet to use for isoform labeling
+ISOALPHA=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S',
+            'T','U','V','W','X','Y','Z']
 
 gffout=open(re.sub(".gff","-prepared.gff",gff),"w")
 tblout=open(re.sub(".gff","-prepared.tbl",gff),"w")
 
-############
+###################
 # MAIN
 
 genes = {}
@@ -78,24 +67,23 @@ with open(gff,"r") as infile:
             genes[feature.parent[0]].add_transcript(feature)
 
         elif feature.type == "exon":
+            if feature.name:
+                genes[feature.name].transcript[feature.parent[0]].add_exon(feature)
+                continue
             for parent in feature.parent:
                 for gene in genes:
                     if re.findall(genes[gene].id,parent):
                         genes[gene].transcript[parent].add_exon(feature)
-#                        break
-#                else:
-#                    print "Failed to find gene for "+feature.id
 
         elif feature.type == "CDS":
+            if feature.name:
+                genes[feature.name].transcript[feature.parent[0]].add_exon(feature)
+                continue
             for parent in feature.parent:
                 for gene in genes:
                     if re.findall(genes[gene].id,parent):
                         genes[gene].transcript[parent].add_cds(feature)
-#                        break
-#                else:
-#                    print "Failed to find gene for "+feature.id
 
-# TODO make sure gene coordinates agree with new exons 
 ###################
 # apparently some maker predictions have CDS entries but no, or too few, exon entries
 # This is either my doing, or maker's. I hate maker.
@@ -111,8 +99,7 @@ for entry in genes:
                 # fix type and offset in raw, for posterity
                 genes[entry].transcript[rec].exons[segment].raw = re.sub("CDS","exon",genes[entry].transcript[rec].exons[segment].raw,flags=re.IGNORECASE)
                 genes[entry].transcript[rec].exons[segment].raw = re.sub("\t[0-9]\t","\t.\t",genes[entry].transcript[rec].exons[segment].raw,flags=re.IGNORECASE)
-# adjust small intron boundaries
-#  ncbi min intron length is 10 bp
+# adjust small intron boundaries (ncbi min intron length is 10 bp)
 # use steps of 3 to preserve frame
 #  this will effectively delete up to 4 amino acids per adjustment (max if intron len was 1)
         for j in range(0,len(genes[entry].transcript[rec].exons)):
@@ -146,88 +133,99 @@ for entry in genes:
 
 ###################
 
-# TODO append locus id
-# TODO add annotations
 # TODO make sure gene and mrna boundaries agree with each other and
 #   constituent exons
 ###################
 
-### OLD CODE
-#for i in scarfs:
-#
-#    scarfs[i].sort(key=lambda q: q[0])
-#
-#    for j in range(len(scarfs[i])):
-#        if locflag == 0:
-#            nam=LOCUS+"_"+str(LOCS).zfill(LOCW)
-#            locs=LOCS+LOCJ
-#            locflag=1
-#
-#        else:
-#            nam=LOCUS+"_"+str(locs).zfill(LOCW)
-#            locs+=LOCJ
-#
-#        glocus[scarfs[i][j][1]]=[i,scarfs[i][j][0],nam]
-#
-## evaluate alignments, use those that pass defined thresholds to annotate contigs
-##  otherwise give them the label in UNK
-## get set of mrnas under consideration
-#for i in mrna:
-#    present.add(i)
-#
-## add annotations to mrna lines
-## GAG will add them to the cds records in the tbl file
+# THIS SECTION CURRENTLY NOT WORKING
+###################
+# Collect annotations for each transcript
+#aseen = set()
+#annots = {}
 #with open(aln,"r") as blast:
 #    for rec in blast:
-#        # qid = 0, sid = 1, pid = 2, aln length = 3 (includes gaps)
 #        thisaln=rec.split("\t")
 #        if thisaln[0] not in aseen:
-#            if thisaln[0] in present:
-##               cov=100*(float(thisaln[3])/float(len(mrna[thisaln[0]])))
-#                cov=thisaln[-1]
-#                if thisaln[2] >= MIN_IDENT and cov >= MIN_COV:
-#                    thisannot=thisaln[-2].split(" ") ##
-#                    refnam='' ##
-#                    for i in range(0,len(thisannot)): ##
-#                        if i == 0 and len(re.findall(BRK,thisannot[i])) < 1: ##
-#                            refnam+=thisannot[i] ##
-#                        elif i > 0 and len(re.findall(BRK,thisannot[i])) < 1: ##
-#                            refnam+=SEPO+thisannot[i] ##
-#                        else: ##
-#                            break ##
-#                    #mrna[thisaln[0]]['annot']=PRE+str(refnam[thisaln[1]])
-#                    mrna[thisaln[0]]['annot']=PRE+SEPO+refnam
-#                else:
-#                    mrna[thisaln[0]]['annot']=UNK
-#                aseen.add(thisaln[0])
+#            cov=thisaln[-1]
+#            if thisaln[2] >= MIN_IDENT and cov >= MIN_COV:
+#                thisannot=thisaln[-2].split(" ")
+#                refnam=''
+#                for i in range(0,len(thisannot)):
+#                    if i == 0 and len(re.findall(BRK,thisannot[i])) < 1:
+#                        refnam+=thisannot[i]
+#                    elif i > 0 and len(re.findall(BRK,thisannot[i])) < 1:
+#                        refnam+=SEPO+thisannot[i]
+#                    else:
+#                        break
+#                annots[thisaln[0]] = PRE + SEPO + refnam
+#            else:
+#                annots[thisaln[0]] = UNK
+#            aseen.add(thisaln[0])
 #
-## add UNK to the contigs with no hits at all
-#for i in mrna:
-#    if i not in aseen:
-#        mrna[i]['annot']=UNK
-#
-## figure out how many isoforms are associated with each gene
-##  need this info because mRNAs have to have form of 'isoform A', not 'isoform 1'
-#for i in mrna:
-#    # reproduce gene line
-#    t=''
-#    for j in i.split("-"):
-#        if j != "mRNA":
-#            t+=j+"-"
-#        else:
-#            gid=t[:-1]
-#    
-#    if gid not in isog:
-#        isog[gid]=[0,1]
+####################
+## Add locus_tag to each gene and annotation to each transcript
+#scaf_order = {}
+#for entry in genes:
+#    this_gene = genes[entry]
+#    if this_gene.gene.seqid not in scaf_order:
+#        scaf_order[this_gene.gene.seqid] = [[this_gene.gene.id,this_gene.gene.start]]
 #    else:
-#        isog[gid][1]+=1
+#        scaf_order[this_gene.gene.seqid].append([this_gene.gene.id,this_gene.gene.start])
+#
+#locflag=0 # flag to indicate first instance of locus ID
+#for scaf in scaf_order:
+#    scaf_order[scaf].sort(key = lambda x: x[1])
+#    for entry in scaf_order[scaf]:
+#        gene_name = entry[0]
+#        if locflag == 0:
+#            nam = LOCUS + "_" + str(LOCS).zfill(LOCW)
+#            locs = LOCS + LOCJ
+#            locflag = 1
+#        else:
+#            nam = LOCUS + "_" + str(locs).zfill(LOCW)
+#            locs += LOCJ
+#
+#        genes[gene_name].gene.locus_tag = nam
+#        # Add locus_tags to each gene's transcripts, with addition of isoform
+#        #  letter if needed
+#        if len(genes[gene_name].transcript) == 1:
+#            tr_id = genes[gene_name].transcript.keys()[0]
+#            genes[gene_name].transcript[tr_id].locus_tag = nam
+#
+#            if tr_id in annots:
+#                genes[gene_name].transcript[tr_id].product = annots[tr_id]
+#            else:
+#                genes[gene_name].transcript[tr_id].product = UNK
+#
+#            for exon in range(0,len(genes[gene_name].transcript[tr_id].exons)):
+#                genes[gene_name].transcript[tr_id].exons[exon].locus_tag = nam
+#            if genes[gene_name].transcript[tr_id].cds:
+#                for i in range(0,len(genes[gene_name].transcript[tr_id].cds)):
+#                    genes[gene_name].transcript[tr_id].cds[i].locus_tag = nam
+#        else:
+#            loc_iter = 0
+#            for prod in sorted(genes[gene_name].transcript):
+#                genes[gene_name].transcript[prod].locus_tag = nam + ISOALPHA[loc_iter]
+#
+#                if prod in annots:
+#                    genes[gene_name].transcript[prod].product = annots[prod]
+#                else:
+#                    genes[gene_name].transcript[prod].product = UNK
+#
+#                for i in range(0,len(genes[gene_name].transcript[prod].exons)):
+#                    genes[gene_name].transcript[prod].exons[i].locus_tag = nam + ISOALPHA[loc_iter]
+#                if genes[gene_name].transcript[prod].cds:
+#                    for j in range(0,len(genes[gene_name].transcript[prod].cds)):
+#                        genes[gene_name].transcript[prod].cds[j].locus_tag = nam + ISOALPHA[loc_iter]
 
+###################
 #load genomic scaffolds
 genome = {}
-with open(ref,"r") as file_object:
+with open(fasta,"r") as file_object:
     for line in f(file_object):
         genome[line[0]] = line[1]
 
+###################
 # output tbl lines
 scafs = set()
 # order genes by ID; hopefully this corresponds to their position on the scaffold
@@ -252,6 +250,7 @@ for rec in sorted(genes):
 
 tblout.close
 
+###################
 # output (repaired) gff lines
 for rec in sorted(genes):
     gffout.write(str(genes[rec].print_gene(outform = 'gff')))
@@ -265,86 +264,5 @@ for rec in sorted(genes):
             print "Failed to write out "+str(genes[rec].transcript[prod].transcript.id)
 
 gffout.close
-
-#### OLD CODE
-## prepare edited gff lines for output
-## GAG take cares of the transcript and protein ID
-#for i in mrna:
-#    # reproduce gene line
-#    t=''
-#    for j in i.split("-"):
-#        if j != "mRNA":
-#            t+=j+"-"
-#        else:
-#            gid=t[:-1]
-#
-#    scaf=getScaf(gid,SCAFL)
-#
-#    gline=[scaf,"maker","gene",glocus[gid][1][0],glocus[gid][1][1],".",mrna[i]['exon'][0][2],".","ID="+glocus[gid][2]]
-#
-#    # handle extra mrna isoforms
-#    if isog[gid][1] > 1:
-#        if 'note' in mrna[i]:
-##           newnote=re.sub(mrna[i]['note'],
-#            mline=[scaf,"maker","mRNA",mrna[i]['exon'][0][0],mrna[i]['exon'][-1][1],".",mrna[i]['exon'][0][2],".","ID="+glocus[gid][2]+ISOALPHA[isog[gid][0]]+";Parent="+glocus[gid][2]+";"+mrna[i]['annot']+";"+mrna[i]['note']]
-#        else:
-#            mline=[scaf,"maker","mRNA",mrna[i]['exon'][0][0],mrna[i]['exon'][-1][1],".",mrna[i]['exon'][0][2],".","ID="+glocus[gid][2]+ISOALPHA[isog[gid][0]]+";Parent="+glocus[gid][2]+";"+mrna[i]['annot']]
-#
-#        # write out to ID conversion table
-#        CTAB.write("mRNA"+"\t"+i+"\t"+glocus[gid][2]+ISOALPHA[isog[gid][0]]+"\n")
-#
-#    else:
-#        if 'note' in mrna[i]:
-#            mline=[scaf,"maker","mRNA",mrna[i]['exon'][0][0],mrna[i]['exon'][-1][1],".",mrna[i]['exon'][0][2],".","ID="+glocus[gid][2]+";Parent="+glocus[gid][2]+";"+mrna[i]['annot']+";"+mrna[i]['note']]
-#        else:
-#            mline=[scaf,"maker","mRNA",mrna[i]['exon'][0][0],mrna[i]['exon'][-1][1],".",mrna[i]['exon'][0][2],".","ID="+glocus[gid][2]+";Parent="+glocus[gid][2]+";"+mrna[i]['annot']]
-#
-#        # write out to ID conversion table
-#        CTAB.write("mRNA"+"\t"+i+"\t"+glocus[gid][2]+"\n")
-#
-#    if gid not in gseenagain:
-#        # add recapitulated gene line and mrna line to 'gene'
-#        gene.append(gline)
-#        gene.append(mline)
-#        gseenagain.add(gid)
-#
-#        # write out to ID conversion table
-#        CTAB.write("gene"+"\t"+gid+"\t"+glocus[gid][2]+"\n")
-#
-#    else:
-#        gene.append(mline)
-#
-#    # add exons and cds
-#    if isog[gid][1] > 1:
-#        for e in range(0,len(mrna[i]['exon'])):
-#            # TODO: stop printing "maker", allow for gmap 
-#            gene.append([scaf,"maker","exon",mrna[i]['exon'][e][0],mrna[i]['exon'][e][1],".",mrna[i]['exon'][e][2],".","ID="+glocus[gid][2]+ISOALPHA[isog[gid][0]]+":exon;Parent="+glocus[gid][2]+ISOALPHA[isog[gid][0]]])
-#        if 'cds' in mrna[i].keys():
-#            for c in range(0,len(mrna[i]['cds'])):
-#                gene.append([scaf,"maker","CDS",mrna[i]['cds'][c][0],mrna[i]['cds'][c][1],".",mrna[i]['cds'][c][2],mrna[i]['cds'][c][3],"ID="+glocus[gid][2]+ISOALPHA[isog[gid][0]]+":cds;Parent="+glocus[gid][2]+ISOALPHA[isog[gid][0]]])
-#
-#        # iterate the isoform label
-#        #  do it here, and not while reconstructing the mrna line,
-#        #    because every mrna will have associated exon(s) and cds(s)
-#        isog[gid][0]+=1
-#    
-#    else:
-#        for e in range(0,len(mrna[i]['exon'])):
-#            # TODO: stop printing "maker", allow for gmap 
-#            gene.append([scaf,"maker","exon",mrna[i]['exon'][e][0],mrna[i]['exon'][e][1],".",mrna[i]['exon'][e][2],".","ID="+glocus[gid][2]+":exon;Parent="+glocus[gid][2]])
-#        if 'cds' in mrna[i].keys():
-#            for c in range(0,len(mrna[i]['cds'])):
-#                gene.append([scaf,"maker","CDS",mrna[i]['cds'][c][0],mrna[i]['cds'][c][1],".",mrna[i]['cds'][c][2],mrna[i]['cds'][c][3],"ID="+glocus[gid][2]+":cds;Parent="+glocus[gid][2]])
-#
-#CTAB.close()
-#    
-## write out edited lines as gff
-#for i in gene:
-#    for j in range(0,len(i)-1):
-#        gffout.write(str(i[j])+"\t")
-#    else:
-#        gffout.write(str(i[-1])+"\n")
-#
-#gffout.close()
 
 ### EOF ###
