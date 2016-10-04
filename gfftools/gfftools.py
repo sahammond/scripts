@@ -452,7 +452,9 @@ class Transcript(object):
                 self.check_threeprime_complete()
             outbuff = []
             if len(self.exons) == 1:
-                return self.print_single_seg(self.exons[0],product_type,outform)
+                outbuff.append(self.print_single_seg(self.exons[0],product_type,outform))
+                outbuff[-1] = "".join([outbuff[-1],"\n"])
+                return "\n".join(outbuff)
             if len(self.exons) > 1:
                 if self.strand == "-":
                     if len(self.exons) == 2:
