@@ -7,6 +7,15 @@ from gfftools import GFF
 from fastatools import fasta_iter
 
 def main():
+    """distribute-gff.py
+    
+    Extract annotations on the given scaffolds
+
+    usage: distribute-gff.py annotations.gff sequences.fa
+    output: sequences.gff
+
+    """
+
     gff = sys.argv[1]
     fasta = sys.argv[2]
 
@@ -34,6 +43,9 @@ def main():
     outfile.close()
 
 if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print main.__doc__
+        sys.exit(1)
     main()
 
 ### EOF ###

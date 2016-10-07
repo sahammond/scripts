@@ -86,54 +86,37 @@ with open(gff,"r") as infile:
                         genes[gene].transcript[parent].add_cds(feature)
 
 ###################
-### This section was apparently only necessary if I mis-collected the maker predicitions intially
-# apparently some maker predictions have CDS entries but no, or too few, exon entries
-# This is either my doing, or maker's. I hate maker.
-# Update: this may have been due to missing exons in the initial maker HC set collection
-#  and may be omitted for now
-# for those predictions, clone the cds to exons
-#for entry in genes:
-#    for rec in genes[entry].transcript:
-#        if len(genes[entry].transcript[rec].cds) > len(genes[entry].transcript[rec].exons):
-#            print "Replacing missing exons in "+rec
-#            genes[entry].transcript[rec].exons = copy.deepcopy(genes[entry].transcript[rec].cds)
-#            for segment in range(0,len(genes[entry].transcript[rec].exons)):
-#                genes[entry].transcript[rec].exons[segment].type = "exon"
-#                genes[entry].transcript[rec].exons[segment].offset = "."
-#                # fix type and offset in raw, for posterity
-#                genes[entry].transcript[rec].exons[segment].raw = re.sub("CDS","exon",genes[entry].transcript[rec].exons[segment].raw,flags=re.IGNORECASE)
-#                genes[entry].transcript[rec].exons[segment].raw = re.sub("\t[0-9]\t","\t.\t",genes[entry].transcript[rec].exons[segment].raw,flags=re.IGNORECASE)
-## adjust small intron boundaries (ncbi min intron length is 10 bp)
-## use steps of 3 to preserve frame
-##  this will effectively delete up to 4 amino acids per adjustment (max if intron len was 1)
-#        for j in range(0,len(genes[entry].transcript[rec].exons)):
-#            try:
-#                dist = (int(genes[entry].transcript[rec].exons[j+1].start)
-#                        - int(genes[entry].transcript[rec].exons[j].stop))
-#                while dist < 11: # if use 'while dist < 10:' then too-small introns remain...
-#                    dist += 3
-#                    genes[entry].transcript[rec].exons[j+1].start = str(int(
-#                                genes[entry].transcript[rec].exons[j+1].start) + 3)
-#                    # adjust the corresponding CDS start too
-#                    try:
-#                        for segment in range(0,len(genes[entry].transcript[rec].cds)):
-#                            if (genes[entry].transcript[rec].exons[j+1].start == 
-#                                    genes[entry].transcript[rec].cds[segment].start):
-#                                genes[entry][transcript].cds[segment].start = str(int(genes[entry].transcript[rec].cds[segment].start) + 3)
-#                    except:
-#                        continue
-#            except:
-#                continue
-#    # make sure gene coordinates agree with new exons by setting them to the outermost
-#    # coordinates of all the transcripts
-#    estarts = set()
-#    eends = set()
-#    for rec in genes[entry].transcript:
-#        for segment in range(0,len(genes[entry].transcript[rec].exons)):
-#            estarts.add(int(re.sub("[<>]","",genes[entry].transcript[rec].exons[segment].start)))
-#            eends.add(int(re.sub("[<>]","",genes[entry].transcript[rec].exons[segment].end)))
-#    genes[entry].gene.start = str(min(estarts))
-#    genes[entry].gene.end = str(max(eends))
+# adjust small intron boundaries (ncbi min intron length is 10 bp)
+# use steps of 3 to preserve frame
+#  this will effectively delete up to 4 amino acids per adjustment (max if intron len was 1)
+for entry in genes:
+    for rec in genes[entry].transcript:
+#        print "Checking intron lengths in " + rec
+        for j in range(0,len(genes[entry].transcript[rec].exons)):
+            dist = 11
+            try:
+                dist = int(genes[entry].transcript[rec].exons[j+1].start) - int(genes[entry].transcript[rec].exons[j].end)
+#                print dist
+            except:
+                pass
+            while dist < 11: # if use 'while dist < 10:' then too-small introns remain...
+                print "Correcting intron length between " + rec + " exons " + str(j+1) + " and " + str(j+2)
+                genes[entry].transcript[rec].exons[j+1].start = str(int(
+                            genes[entry].transcript[rec].exons[j+1].start) + 3)
+                dist += 3
+        # adjust the corresponding CDS start too, if the CDS start == that exon's start!
+        for j in range(0,len(genes[entry].transcript[rec].cds)):
+            dist = 11
+            try:
+                dist = int(genes[entry].transcript[rec].cds[j+1].start) - int(genes[entry].transcript[rec].cds[j].end)
+#                print dist
+            except:
+                pass
+            while dist < 11: # if use 'while dist < 10:' then too-small introns remain...
+                print "Applying intron length correction between " + rec + " exons " + str(j+1) + " and " + str(j+2) + " to the CDS too"
+                genes[entry].transcript[rec].cds[j+1].start = str(int(
+                            genes[entry].transcript[rec].cds[j+1].start) + 3)
+                dist += 3
 
 ###################
 # Collect annotations for each transcript
