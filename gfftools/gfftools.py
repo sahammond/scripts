@@ -248,7 +248,10 @@ class Transcript(object):
                     outbuff.append("\t\t\tncRNA_class\tlncRNA")
                 if self.transcript.product:
                     if re.findall("similar",self.transcript.product):
-                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
+                        if self.transcript.locus_tag:
+                            outbuff.append("\t".join(["\t\t\tproduct",self.transcript.locus_tag]))
+                        else:
+                            outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
                     else:
                         outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
                 if self.transcript.note:
@@ -256,15 +259,15 @@ class Transcript(object):
                 if product_type == "mRNA":
                     if self.transcript.locus_tag:
                         outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
-                                                feature.locus_tag]))
+                                                self.transcript.locus_tag]))
                         outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
-                                                feature.locus_tag,"_mRNA"]))
+                                                self.transcript.locus_tag,"_mRNA"]))
                     else:
                         outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
                                                 feature.parent[0]]))
                         outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
                                                 feature.parent[0],"_mRNA"]))
-            elif feature.type == "CDS":
+            if feature.type == "CDS":
                 if feature.strand == "-":
                     outbuff.append("\t".join([feature.end,feature.start,"CDS"]))
                 else:
@@ -272,8 +275,12 @@ class Transcript(object):
 
                 if self.transcript.product:
                     if re.findall("similar",self.transcript.product):
-                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
-                        outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
+                        if self.transcript.locus_tag:
+                            outbuff.append("\t".join(["\t\t\tproduct",self.transcript.locus_tag]))
+                            outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
+                        else:
+                            outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
+                            outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
                     else:
                         outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
                 if self.transcript.note:
@@ -282,9 +289,9 @@ class Transcript(object):
                 outbuff.append("\t\t\tcodon_start\t1")
                 if self.transcript.locus_tag:
                     outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
-                                            feature.locus_tag]))
+                                            self.transcript.locus_tag]))
                     outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
-                                            feature.locus_tag,"_mRNA"]))
+                                            self.transcript.locus_tag,"_mRNA"]))
                 else:
                     outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
                                             feature.parent[0]]))
@@ -371,7 +378,10 @@ class Transcript(object):
                     outbuff.append("\t".join([feature.start,feature.end]))
                 if self.transcript.product:
                     if re.findall("similar",self.transcript.product):
-                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
+                        if self.transcript.locus_tag:
+                            outbuff.append("\t".join(["\t\t\tproduct",self.transcript.locus_tag]))
+                        else:
+                            outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
 #                        outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
                     else:
                         outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
@@ -380,9 +390,9 @@ class Transcript(object):
                 if product_type == "mRNA":
                     if self.transcript.locus_tag:
                         outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
-                                                feature.locus_tag]))
+                                                self.transcript.locus_tag]))
                         outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
-                                                feature.locus_tag,"_mRNA"]))
+                                                self.transcript.locus_tag,"_mRNA"]))
                     else:
                         outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
                                                 feature.parent[0]]))
@@ -397,8 +407,12 @@ class Transcript(object):
                     outbuff.append("\t".join([feature.start,feature.end]))
                 if self.transcript.product:
                     if re.findall("similar",self.transcript.product):
-                        outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
-                        outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
+                        if self.transcript.locus_tag:
+                            outbuff.append("\t".join(["\t\t\tproduct",self.transcript.locus_tag]))
+                            outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
+                        else:
+                            outbuff.append("\t".join(["\t\t\tproduct",self.transcript.parent[0]]))
+                            outbuff.append("\t".join(["\t\t\tprot_desc",self.transcript.product]))
                     else:
                         outbuff.append("\t".join(["\t\t\tproduct",self.transcript.product]))
                 if self.transcript.note:
@@ -407,9 +421,9 @@ class Transcript(object):
                 outbuff.append("\t\t\tcodon_start\t1")
                 if self.transcript.locus_tag:
                     outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
-                                            feature.locus_tag]))
+                                            self.transcript.locus_tag]))
                     outbuff.append("".join(["\t\t\ttranscript_id\tgnl|BCGSC|",
-                                            feature.locus_tag,"_mRNA"]))
+                                            self.transcript.locus_tag,"_mRNA"]))
                 else:
                     outbuff.append("".join(["\t\t\tprotein_id\tgnl|BCGSC|",
                                             feature.parent[0]]))
@@ -453,8 +467,8 @@ class Transcript(object):
             outbuff = []
             if len(self.exons) == 1:
                 outbuff.append(self.print_single_seg(self.exons[0],product_type,outform))
-                outbuff[-1] = "".join([outbuff[-1],"\n"])
-                return "\n".join(outbuff)
+#                outbuff[-1] = "".join([outbuff[-1],"\n"])
+#                return "\n".join(outbuff)
             if len(self.exons) > 1:
                 if self.strand == "-":
                     if len(self.exons) == 2:
@@ -509,8 +523,7 @@ class Transcript(object):
                             if not self.stop_complete:
                                 self.cds[-1].end = ">" + self.cds[-1].end
                 if len(self.cds) == 1:
-                    outbuff.append(self.print_single_seg(self.cds[0],product_type,
-                                    outform))
+                    outbuff.append(self.print_single_seg(self.cds[0],product_type,outform))
                 if len(self.cds) > 1:
                     if self.strand == "-":
                         if len(self.cds) == 2:
