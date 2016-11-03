@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# usage: gff3-to-tbl.py genes.gff genome.fa alignment.blastp
+# usage: gff3-to-tbl.py genes.gff genome.fa alignment.blastp first_locus_number
 
 import sys
 import re
@@ -10,11 +10,12 @@ from fastatools import fasta_iter as f
 import gfftools
 
 ############
-# parse arguments
+# parse arguments #TODO replace with argparse
 
 gff = sys.argv[1]
 fasta = sys.argv[2]
-aln=sys.argv[3]
+aln = sys.argv[3]
+loc = sys.argv[4]
 
 ############
 # declarations
@@ -22,7 +23,8 @@ aln=sys.argv[3]
 # NCBI-assigned locus_tag
 LOCUS="AB205"
 # start number for locus id iteration
-LOCS=50
+#LOCS=50
+LOCS=int(loc)
 # width for locus ids (i.e. total with padding)
 LOCW=7
 # jump size between loci (good idea to allow for genes identified between current ones)
@@ -44,7 +46,7 @@ UNK='hypothetical protein'
 ISOALPHA=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S',
             'T','U','V','W','X','Y','Z']
 
-gffout=open(re.sub(".gff","-prepared.gff",gff),"w")
+#gffout=open(re.sub(".gff","-prepared.gff",gff),"w")
 tblout=open(re.sub(".gff","-prepared.tbl",gff),"w")
 lokey=open(re.sub(".gff","-locus_tag-conversion-key.tsv",gff),"w")
 
@@ -54,6 +56,7 @@ lokey=open(re.sub(".gff","-locus_tag-conversion-key.tsv",gff),"w")
 genes = {}
 # read in the entries from the gff file
 with open(gff,"r") as infile:
+    print "Reading the annotations"
     for line in infile:
         if line[0] == "#" or line[0] == "-":
             continue
@@ -89,6 +92,7 @@ with open(gff,"r") as infile:
 # adjust small intron boundaries (ncbi min intron length is 10 bp)
 # use steps of 3 to preserve frame
 #  this will effectively delete up to 4 amino acids per adjustment (max if intron len was 1)
+print "Checking intron lengths"
 for entry in genes:
     for rec in genes[entry].transcript:
 #        print "Checking intron lengths in " + rec
@@ -123,6 +127,7 @@ for entry in genes:
 aseen = set()
 annots = {}
 with open(aln,"r") as blast:
+    print "Loading the annotations"
     for rec in blast:
         thisaln=rec.split("\t")
         if thisaln[0] not in aseen:
@@ -145,18 +150,27 @@ with open(aln,"r") as blast:
 ####################
 # Add locus_tag to each gene and annotation to each transcript
 scaf_order = {}
+print "Ordering the predictions along the genomic scaffolds"
 for entry in genes:
     this_gene = genes[entry]
     if this_gene.gene.seqid not in scaf_order:
-        scaf_order[this_gene.gene.seqid] = [[this_gene.gene.id,this_gene.gene.start]]
+        if this_gene.gene.strand == "-":
+            scaf_order[this_gene.gene.seqid] = [[this_gene.gene.id,this_gene.gene.end]]
+        else:
+            scaf_order[this_gene.gene.seqid] = [[this_gene.gene.id,this_gene.gene.start]]
     else:
-        scaf_order[this_gene.gene.seqid].append([this_gene.gene.id,this_gene.gene.start])
+        if this_gene.gene.strand == "-":
+            scaf_order[this_gene.gene.seqid].append([this_gene.gene.id,this_gene.gene.end])
+        else:
+            scaf_order[this_gene.gene.seqid].append([this_gene.gene.id,this_gene.gene.start])
 
 locflag = 0 # flag to indicate first instance of locus ID
 lokey_dict = {}
+print "Adding locus tags and applying functional annotations"
 for scaf in scaf_order:
-    scaf_order[scaf].sort(key = lambda x: x[1])
-    for entry in scaf_order[scaf]:
+#    scaf_order[scaf].sort(key = lambda x: x[1])
+#    for entry in scaf_order[scaf]:
+    for entry in sorted(scaf_order[scaf],key = lambda x: int(x[1])):
         gene_name = entry[0]
         if locflag == 0:
             nam = LOCUS + "_" + str(LOCS).zfill(LOCW)
@@ -217,57 +231,67 @@ lokey.close()
 #load genomic scaffolds
 genome = {}
 with open(fasta,"r") as file_object:
+    print "Loading genomic scaffolds"
     for line in f(file_object):
         genome[line[0]] = line[1]
 
 ###################
 # output tbl lines
-scafs = set()
+#scafs = set()
+prev_scaf = ''
 # order genes by ID; hopefully this corresponds to their position on the scaffold
-for rec in sorted(genes):
-    if genes[rec].gene.seqid not in scafs:
-        tblout.write("".join([">Feature ",genes[rec].gene.seqid,"\n"]))
-        tblout.write("\t".join(["1",str(len(genome[genes[rec].gene.seqid])),
-                                        "REFERENCE\n"]))
-        tblout.write("\t".join(["\t\t\tPBARC","12345\n"]))
-        scafs.add(genes[rec].gene.seqid)
+print "Writing final .tbl file"
+for scaf in scaf_order:
+#    for entry in scaf_order[scaf]:
+    for entry in sorted(scaf_order[scaf],key = lambda x: int(x[1])):
+        rec = entry[0]
+#        for rec in sorted(genes):
+#        if genes[rec].gene.seqid not in scafs:
+        if genes[rec].gene.seqid != prev_scaf:
+            tblout.write("".join([">Feature ",genes[rec].gene.seqid,"\n"]))
+            tblout.write("\t".join(["1",str(len(genome[genes[rec].gene.seqid])),
+                                            "REFERENCE\n"]))
+            tblout.write("\t".join(["\t\t\tPBARC","12345\n"]))
+#            scafs.add(genes[rec].gene.seqid)
 
-    tblout.write(str(genes[rec].print_gene()))
+        tblout.write(str(genes[rec].print_gene()))
+        prev_scaf = genes[rec].gene.seqid
 
-    # sort each gene's transcripts by name
-    for prod in sorted(genes[rec].transcript.keys()):
-        try:
-            # if there is a note about a split feature, fix it
-            if genes[rec].transcript[prod].transcript.note:
-                this_note = genes[rec].transcript[prod].transcript.note.split(" ")
-                fixed_note = []
-                for i in this_note:
-                    if i in lokey_dict:
-                        fixed_note.append(lokey_dict[i])
-                    else:
-                        fixed_note.append(re.sub("end_","end;",i))
-                genes[rec].transcript[prod].transcript.note = " ".join(fixed_note)
-            tblout.write(str(genes[rec].transcript[prod].print_transcript(
-                        product_type = genes[rec].transcript[prod].transcript.type,
-                        outform = 'tbl',sequence=genome[genes[rec].gene.seqid])))
-        except:
-            print "Failed to write out "+str(genes[rec].transcript[prod].transcript.id)
+        # sort each gene's transcripts by name
+        for prod in sorted(genes[rec].transcript.keys()):
+            try:
+                # if there is a note about a split feature, fix it
+                if genes[rec].transcript[prod].transcript.note:
+                    this_note = genes[rec].transcript[prod].transcript.note.split(" ")
+                    fixed_note = []
+                    for i in this_note:
+                        if i in lokey_dict:
+                            fixed_note.append(lokey_dict[i])
+                        else:
+                            fixed_note.append(re.sub("end_","end;",i))
+                    genes[rec].transcript[prod].transcript.note = " ".join(fixed_note)
+                tblout.write(str(genes[rec].transcript[prod].print_transcript(
+                            product_type = genes[rec].transcript[prod].transcript.type,
+                            outform = 'tbl',sequence=genome[genes[rec].gene.seqid])))
+            except:
+                print "Failed to write out "+str(genes[rec].transcript[prod].transcript.id)
 
 tblout.close
 
 ###################
 # output (repaired) gff lines
-for rec in sorted(genes):
-    gffout.write(str(genes[rec].print_gene(outform = 'gff')))
-
-    for prod in sorted(genes[rec].transcript.keys()):
-        try:
-            gffout.write(str(genes[rec].transcript[prod].print_transcript(
-                        product_type = genes[rec].transcript[prod].transcript.type,
-                        outform = 'gff')))
-        except:
-            print "Failed to write out "+str(genes[rec].transcript[prod].transcript.id)
-
-gffout.close
+#print "Writing .gff equivalent of .tbl file"
+#for rec in sorted(genes):
+#    gffout.write(str(genes[rec].print_gene(outform = 'gff')))
+#
+#    for prod in sorted(genes[rec].transcript.keys()):
+#        try:
+#            gffout.write(str(genes[rec].transcript[prod].print_transcript(
+#                        product_type = genes[rec].transcript[prod].transcript.type,
+#                        outform = 'gff')))
+#        except:
+#            print "Failed to write out "+str(genes[rec].transcript[prod].transcript.id)
+#
+#gffout.close
 
 ### EOF ###

@@ -25,8 +25,8 @@ with open(gff,"r") as infile:
                 fstart=int(rec.start)-1 
                 fend=int(rec.end)-1
                 edic[mid]=[rec.seqid,fstart,fend,mid,0,rec.strand,fstart,fend,[255,0,0]]
-                if rec.type != "ncRNA":
-                    cdic[mid]=[rec.seqid,fstart,fend,mid,0,rec.strand,fstart,fend,[0,0,255]]
+#                if rec.type != "ncRNA":
+#                    cdic[mid]=[rec.seqid,fstart,fend,mid,0,rec.strand,fstart,fend,[0,0,255]]
             elif rec.type == "exon":
                 mid=re.sub(":exon","",rec.id)
                 fstart=int(rec.start)-1-edic[mid][1]
@@ -83,31 +83,31 @@ for exon in edic:
             outfile.write(str(i)+",")
         else:
             outfile.write("\n")
+if len(cdic) > 0:
+    for cds in cdic:
+        # derive bed file name
+        bed = re.sub(".gff","_"+str(cdic[cds][3])+"_cds.bed",gff)
 
-for cds in cdic:
-    # derive bed file name
-    bed = re.sub(".gff","_"+str(cdic[cds][3])+"_cds.bed",gff)
+        with open(bed,"w") as outfile:
+            outfile.write('track name="'+str(cdic[cds][3])+' CDS"'+' description="'+str(cdic[cds][3])+'"'+' itemRgb="On"'+'\n')
 
-    with open(bed,"w") as outfile:
-        outfile.write('track name="'+str(cdic[cds][3])+' CDS"'+' description="'+str(cdic[cds][3])+'"'+' itemRgb="On"'+'\n')
+            for rec in cdic[cds][0:8]:
+                outfile.write(str(rec)+"\t")
 
-        for rec in cdic[cds][0:8]:
-            outfile.write(str(rec)+"\t")
+            for i in cdic[cds][8]:
+                outfile.write(str(i)+",")
+            else:
+                outfile.write("\t")
 
-        for i in cdic[cds][8]:
-            outfile.write(str(i)+",")
-        else:
-            outfile.write("\t")
+            outfile.write(str(cdic[cds][9])+"\t")
+            
+            for i in cdic[cds][10]:
+                outfile.write(str(i)+",")
+            else:
+                outfile.write("\t")
 
-        outfile.write(str(cdic[cds][9])+"\t")
-        
-        for i in cdic[cds][10]:
-            outfile.write(str(i)+",")
-        else:
-            outfile.write("\t")
-
-        for i in cdic[cds][11]:
-            outfile.write(str(i)+",")
-        else:
-            outfile.write("\n")
+            for i in cdic[cds][11]:
+                outfile.write(str(i)+",")
+            else:
+                outfile.write("\n")
 ### EOF ###
