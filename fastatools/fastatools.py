@@ -37,10 +37,17 @@ def dna2aa(seq):
 		j+=1
 		if j==(seql-1):
 			codon=seq[j:]
+			try:
+				aa=aa+tbl[codon]
+			except:
+				aa=aa+"X"
 		else:
 			codon=seq[j-1:j+2]
+			try:
+				aa=aa+tbl[codon]
+			except:
+				aa=aa+"X"
 #	print codon
-		aa=aa+tbl[codon]
 	return aa
 
 ## revcomp

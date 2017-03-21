@@ -1,4 +1,4 @@
-#!/home/shammond/arch/CentOS_5/bin/python
+#!/usr/bin/env python
 
 # quick and dirty gff3 (maker-style post- sort-gff.py) to bed file converter
 
