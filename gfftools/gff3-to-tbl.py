@@ -6,42 +6,58 @@ import sys
 import re
 import copy
 
+import argparse
+
 from fastatools import fasta_iter as f
 import gfftools
 
 ############
-# parse arguments #TODO replace with argparse
+# parse arguments
 
-gff = sys.argv[1]
-fasta = sys.argv[2]
-aln = sys.argv[3]
-loc = sys.argv[4]
+desc = "".join(["Convert a MAKER2 gff to NCBI's tbl format.",
+    " Also make adjustments to conform to NCBI's submission requirements,",
+    " namely miniumum intron width of 10 bp. This is performed by sliding the",
+    " position of the 3' intron boundary rightwards in increments of 3 bp.",
+    " so as not to introduce frameshift errors."])
+
+parser = argparse.ArgumentParser(description=desc)
+
+parser.add_argument('gff', action='store', help='MAKER2 gff file')
+parser.add_argument('fasta', action='store',
+    help='FASTA file of scaffolds annoated by MAKER2')
+parser.add_argument('aln', action='store', help='Tabular blastp alignment of MAKER2 proteins vs. SwissProt')
+
+parser.add_argument('--locus_tag', '-t', action='store', help='NCBI-supplied locus tag prefix [AB205]', default="AB205")
+parser.add_argument('--locus_tag_start', '-s', action='store', help='Initial value to use for locus_tag generation [50]', default=50)
+parser.add_argument('--tag_width', '-w', action='store', help='Width for numeric portion of locus_tag [7]', default=7)
+parser.add_argument('--tag_jump', '-j', action='store', help='Interval between locus_tag numbers [10]', default=10)
+parser.add_argument('--min_ident', '-i', action='store', help='Minimum percent identity to accept alignment for annotation [25]', default=25)
+parser.add_argument('--min_cov', '-c', action='store', help='Minimum percent coverage to accept alignment for annotation [50]', default=50)
+parser.add_argument('--ref_break', '-b', action='store', help='String to split reference protein names (expects SwissProt-style FASTA deflines [OS=]', default='OS=')
+parser.add_argument('--prod_break', '-r', action='store', help='Field separator for product line [space]', default=' ')
+parser.add_argument('--prefix', '-p', action='store', help='Prefix to use for product name [similar to]', default='similar to')
+parser.add_argument('--unknown', '-u', action='store', help='Label to give proteins without an acceptable annotation [hypothetical protein]', default='hypothetical protein')
+
+args = parser.parse_args()
+
+gff = args.gff
+fasta = args.fasta
+aln = args.aln
+
+LOCUS = args.locus_tag
+LOCS = int(args.locus_tag_start)
+LOCW = int(args.tag_width)
+LOCJ = int(args.tag_jump)
+MIN_IDENT = int(args.min_ident)
+MIN_COV = int(args.min_cov)
+BRK = args.ref_break
+SEPO = args.prod_break
+PRE = args.prefix
+UNK = args.unknown
 
 ############
-# declarations
+# hard-coded declarations
 
-# NCBI-assigned locus_tag
-LOCUS="AB205"
-# start number for locus id iteration
-#LOCS=50
-LOCS=int(loc)
-# width for locus ids (i.e. total with padding)
-LOCW=7
-# jump size between loci (good idea to allow for genes identified between current ones)
-LOCJ=10
-# miniumum percent identity to accept alignment for annotation
-MIN_IDENT=25
-# minimum percent coverage to accept alignment for annotation
-MIN_COV=50
-# string to split reference protein names with. Script expects swissprot-style protein
-#  names in reference.fa, use 'OS='
-BRK='OS=' 
-# field sep for product line
-SEPO=' '
-# string to prefix description with
-PRE='similar to'
-# label to give queries that have no good annotation
-UNK='hypothetical protein'
 # alphabet to use for isoform labeling
 ISOALPHA=['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S',
             'T','U','V','W','X','Y','Z']
@@ -129,17 +145,17 @@ annots = {}
 with open(aln,"r") as blast:
     print "Loading the annotations"
     for rec in blast:
-        thisaln=rec.split("\t")
+        thisaln = rec.split("\t")
         if thisaln[0] not in aseen:
-            cov=thisaln[-1]
+            cov = thisaln[-1]
             if thisaln[2] >= MIN_IDENT and cov >= MIN_COV:
-                thisannot=thisaln[-2].split(" ")
-                refnam=''
+                thisannot = thisaln[-2].split(" ")
+                refnam = ''
                 for i in range(0,len(thisannot)):
                     if i == 0 and len(re.findall(BRK,thisannot[i])) < 1:
-                        refnam+=thisannot[i]
+                        refnam += thisannot[i]
                     elif i > 0 and len(re.findall(BRK,thisannot[i])) < 1:
-                        refnam+=SEPO+thisannot[i]
+                        refnam += SEPO+thisannot[i]
                     else:
                         break
                 annots[thisaln[0]] = PRE + SEPO + refnam
@@ -243,7 +259,7 @@ prev_scaf = ''
 print "Writing final .tbl file"
 for scaf in scaf_order:
 #    for entry in scaf_order[scaf]:
-    for entry in sorted(scaf_order[scaf],key = lambda x: int(x[1])):
+    for entry in sorted(scaf_order[scaf], key=lambda x: int(x[1])):
         rec = entry[0]
 #        for rec in sorted(genes):
 #        if genes[rec].gene.seqid not in scafs:
@@ -274,7 +290,7 @@ for scaf in scaf_order:
                             product_type = genes[rec].transcript[prod].transcript.type,
                             outform = 'tbl',sequence=genome[genes[rec].gene.seqid])))
             except:
-                print "Failed to write out "+str(genes[rec].transcript[prod].transcript.id)
+                print "Failed to write out " + str(genes[rec].transcript[prod].transcript.id)
 
 tblout.close
 
