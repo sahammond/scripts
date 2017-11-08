@@ -48,6 +48,7 @@ class GFF(object):
         self.name = ""
         self.note = ""
         self.target = ""
+        self.prot_desc = ""
         self.trailing = ""
 
         for entry in _attr:
@@ -62,6 +63,10 @@ class GFF(object):
                 self.name = re.sub("Name=","",entry)
             elif re.findall("note=",entry):
                 self.note = re.sub("note=","",entry)
+            elif re.findall("locus_tag=",entry):
+                self.locus_tag = re.sub("locus_tag=","",entry)
+            elif re.findall("prot_desc=",entry):
+                self.prot_desc = re.sub("prot_desc=","",entry)
             elif re.findall("Target=",entry):
                 _unspl = re.sub("Target=","",entry).split(" ")
                 self.target = _unspl[0]
