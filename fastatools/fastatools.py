@@ -38,12 +38,13 @@ def dna2aa(seq):
         "TGA":"-"}
 	j = 0 # for iteration
 	aa = ''
+    seq = seq.upper() # TODO handle masked sequences more elegantly
 	seql = len(seq)
 	if seql % 3 != 0:
 		seq = seq[0:(seql-seql%3)] #trim to multiple of 3, but should be already
 	seql = len(seq) #recalculate
 	for j in range(0,seql,3):
-		j+=1
+		j += 1
 		if j == (seql-1):
 			codon = seq[j:]
 			try:
@@ -66,6 +67,7 @@ def revcomp(seq):
 	tbl = {"T":"A","C":"G","G":"C","A":"T","U":"A","R":"Y","Y":"R","S":"S","W":"W","K":"M",
         "M":"K","B":"V","V":"B","D":"H","H":"D","N":"N","-":"-","*":"*"}
 	fwd = ''
+    seq = seq.upper() # TODO handle masked sequences more elegantly
 	for i in seq:
 		fwd += tbl[i]
 	return fwd[::-1]
@@ -90,6 +92,7 @@ def sixframe(seq):
 def trimpep(seq):
 	pos = 0 # for iteration
 	tseq = ''
+    seq = seq.upper() # TODO handle masked sequences more elegantly
 	for res in seq:
 		pos += 1
 		if res == 'M':
