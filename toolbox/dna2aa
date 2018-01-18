@@ -1,30 +1,27 @@
 #!/usr/bin/env python
 
-## @package dna2aa 
+### @package dna2aa 
+##   Translate the input sequence in the specified or all frames.
+##
+##   Output: .fa file of translated subject sequences.
+##   These sequences are naively translated as internal ORFs,
+##   and are likely larger than the sequence's true ORF.
+##   The output is best suited to use for hmmer-like alignments.
+##
+##   Alternatively, using the 'seqbreak' option, ORFs are broken
+##   at stop codons.
+##
+##   Written by Austin Hammond, GSC 2015
 
-#   Translate the input sequence in the specified or all frames.
-#
-
-#   Output: .fa file of translated subject sequences.
-
-#   These sequences are naively translated as internal ORFs,
-
-#   and are likely larger than the sequence's true ORF.
-
-#   The output is best suited to use for hmmer-like alignments.
-#
-
-#   Alternatively, using the 'seqbreak' option, ORFs are broken
-
-#   at stop codons.
-#
-
-#   Written by Austin Hammond, GSC 2015
 import argparse
 import sys
 import csv
+
 import fastatools as ft
 
+# TODO
+## output ORF sequence itself in addition to peptide
+## add eval of complete/partial ORF + peptide
 
 def mtdna2aa(seq):
     tbl = {"ATT":"I", "ATC":"I", "ATA":"M", "CTT":"L", "CTC":"L", "CTA":"L", "CTG":"L",
@@ -38,14 +35,14 @@ def mtdna2aa(seq):
         "CGC":"R", "CGA":"R", "CGG":"R", "AGA":"-", "AGG":"-", "TAA":"-", "TAG":"-",
         "TGA":"W"}
     j = 0 # for iteration
-    aa = ''
+    aa = ""
     seql = len(seq)
     if seql % 3 != 0:
-        seq = seq[0:(seql-seql%3)] #trim to multiple of 3, but should be already
+        seq = seq[0:(seql - seql%3)] #trim to multiple of 3, but should be already
     seql = len(seq) #recalculate
-    for j in range(0,seql,3):
+    for j in range(0, seql, 3):
         j += 1
-        if j == (seql-1):
+        if j == (seql - 1):
             codon = seq[j:]
         else:
             codon = seq[j-1:j+2]
@@ -63,24 +60,74 @@ def mtsixframe(seq):
     none = mtdna2aa(ft.revcomp(seq))
     ntwo = mtdna2aa(ft.revcomp(seq)[1:])
     nthree = mtdna2aa(ft.revcomp(seq)[2:])
-    return [one, two, three, none, ntwo, nthree]    
+    return [one, two, three, none, ntwo, nthree]
+
+
+def trim_met(sqn):
+    # trim the given sequence to the first methionine (M) residue
+    # if no M, then 'no_met' is returned
+    for pos in range(0, len(sqn)):
+        res = sqn[pos]
+        if res is not "M":
+            continue
+        else:
+            outsqn = sqn[pos:]
+            return outsqn
+    else:
+        return "no_met"
+
+
+def trim_off_stop(sqn):
+    # trim off the stop codon marks that I introduce (-)
+    # only trims "-" at end of the peptide
+    if "-" not in sqn:
+        return sqn
+    rev = sqn[::-1]
+    for pos in range(0, len(rev)):
+        res = rev[pos]
+        if res is "-":
+            continue
+        else:
+            trim = rev[pos:][::-1]
+            break
+    return trim
+
+
+def len_thresh(sqn, threshold):
+    # drop sequences under a given length
+    # sequences where len >= threshold will be output
+    # sqn is a single translated sequence [STR]
+    # threshold = [INT]
+    # if len(sqn) < threshold, 'short_pep_LEN_residues' returned
+    thresh = int(threshold) # just in case...
+    sqnS = sqn.strip() # avoid trailing whitespace, newlines
+    sqnL = len(sqnS)
+    if sqnL >= threshold:
+        return sqnS
+    else:
+        msg = "".join(["short_pep_", str(sqnL), "_residues"])
+        return msg
 
 # setup parser
 parser = argparse.ArgumentParser(
-    description='Naively translate the input DNA sequence.')
+    description="Naively translate the input DNA sequence.")
 parser.add_argument(
-    '--sequence', '-s', action='store', help="The fasta file of DNA sequences [STDIN]",
-    default='stdin')
-parser.add_argument('--frame', '-f', action='store',
-    choices=['+1','+2','+3','-1','-2','-3','all'],
-    help="Frame to use for sequence translation [all]", default='all')
-parser.add_argument('--seqbreak','-b',action='store_true',
+    "--sequence", "-s", action="store", help="The fasta file of DNA sequences [STDIN]",
+    default="stdin")
+parser.add_argument("--frame", "-f", action="store",
+    choices=["+1","+2","+3","-1","-2","-3","all"],
+    help="Frame to use for sequence translation [all]", default="all")
+parser.add_argument("--seqbreak","-b",action="store_true",
     help="Break translations at in-frame stop codons")
-parser.add_argument('--outfile', '-o', action='store',
-    help='Name to use for output fasta file [STDOUT]', default='stdout')
-parser.add_argument('--mito', '-m', action='store_true', 
-    help=('Sequence is mitochondrial; use vertebrate Mt code.'
-        ' Does not allow stop codons to be completed by polyadenylation.'))
+parser.add_argument("--outfile", "-o", action="store",
+    help="Name to use for output fasta file [STDOUT]", default="stdout")
+parser.add_argument("--mito", "-m", action="store_true", 
+    help=("Sequence is mitochondrial; use vertebrate Mt code."
+          " Does not allow stop codons to be completed by polyadenylation."))
+parser.add_argument("--min_length", "-l", help="Minimum peptide length to output [30]",
+                    action="store", type=int, default=30)
+parser.add_argument("--trim_to_met", "-t", help="Trim peptides to first M",
+                    action="store_true")
 
 # parse args
 args = parser.parse_args()
@@ -91,31 +138,33 @@ outfile = args.outfile
 outdic = {}
 mito = args.mito
 seqbreak = args.seqbreak
+minlen = args.min_length
+trim = args.trim_to_met
 
 # check that the frame was passed properly
-if frm == 'all':
+if frm == "all":
     pass
 elif "+" in frm:
     pass
-elif frm == '1':
-    frm = '+1'
-elif frm == '2':
-    frm = '+2'
-elif frm == '3':
-    frm = '+3'
+elif frm == "1":
+    frm = "+1"
+elif frm == "2":
+    frm = "+2"
+elif frm == "3":
+    frm = "+3"
 elif "-" not in frm:
     print "ERROR: I didn't understand what reading frame you want."
     print "Please specify 'all' or a single frame including + or - and retry."
     sys.exit(1)
 
 # define possible reading frames
-if frm == 'all':
-    frames = ['+1','+2','+3','-1','-2','-3']
+if frm == "all":
+    frames = ["+1","+2","+3","-1","-2","-3"]
 else:
     frames = [frm]
 
 # read in sequence input
-if fasta == 'stdin':
+if fasta == "stdin":
     for rec in ft.fasta_iter(sys.stdin):
         fastadic[rec[0].split(" ")[0]] = rec[1]
 else:
@@ -124,37 +173,39 @@ else:
             sid = rec[0].split(" ")[0]
             sqn = rec[1]
             fastadic[sid] = sqn
+
+# perform translations
 if seqbreak:
     # setup separate dict to hold split translations
     transdic = {}
 for sid, sqn in fastadic.items():
     if mito == True:
-        if frm == 'all':
+        if frm == "all":
             trns = mtsixframe(sqn)
-        elif frm == '+1':
+        elif frm == "+1":
             trns = mtdna2aa(sqn)
-        elif frm == '+2':
+        elif frm == "+2":
             trns = mtdna2aa(sqn[1:])
-        elif frm == '+3':
+        elif frm == "+3":
             trns = mtdna2aa(sqn[2:])
-        elif frm == '-1':
+        elif frm == "-1":
             trns = mtdna2aa(ft.revcomp(sqn))
-        elif frm == '-2':
+        elif frm == "-2":
             trns = mtdna2aa(ft.revcomp(sqn)[1:])
         else:
             trns = mtdna2aa(ft.revcomp(sqn)[2:])
     else:
-        if frm == 'all':
+        if frm == "all":
             trns = ft.sixframe(sqn)
-        elif frm == '+1':
+        elif frm == "+1":
             trns = ft.dna2aa(sqn)
-        elif frm == '+2':
+        elif frm == "+2":
             trns = ft.dna2aa(sqn[1:])
-        elif frm == '+3':
+        elif frm == "+3":
             trns = ft.dna2aa(sqn[2:])
-        elif frm == '-1':
+        elif frm == "-1":
             trns = ft.dna2aa(ft.revcomp(sqn))
-        elif frm == '-2':
+        elif frm == "-2":
             trns = ft.dna2aa(ft.revcomp(sqn)[1:])
         else:
             trns = ft.dna2aa(ft.revcomp(sqn)[2:])
@@ -163,7 +214,7 @@ for sid, sqn in fastadic.items():
     if seqbreak:
         # if frm == all, trns is a list; otherwise is a string #TODO make always a list
         if type(trns) == list:
-            if frm == 'all':
+            if frm == "all":
                 transzip = zip(frames, trns)
             else:
                 transzip = (frm, trns)
@@ -182,7 +233,7 @@ for sid, sqn in fastadic.items():
     else:
         if type(trns) == list:
             outdic[sid] = {}
-            if frm == 'all':
+            if frm == "all":
                 transzip = zip(frames, trns)
             else:
                 transzip = (frm, trns)
@@ -194,18 +245,59 @@ for sid, sqn in fastadic.items():
             outdic[sid][frm] = trns
 
 # write the translations to a file
-if outfile == 'stdout':
+
+# TODO clean up this redundant code
+if outfile == "stdout":
     for nam, trns in outdic.items():
         if seqbreak:
             for frame in frames:
                 seqno = 0
                 for rec in trns[frame]:
-                    header = "".join([">", nam, "_frame=", frame, ";ORF_num=", str(seqno + 1), "\n"])
-                    print header, trns[frame][seqno]
-                    seqno += 1
+                    # get rid of trailing "-"
+                    pep = trim_off_stop(trns[frame][seqno])
+                    # apply trim_met before length cutoff
+                    if trim:
+                        trimmed = trim_met(pep)
+                        if "no_met" in trimmed:
+                            continue
+                        else:
+                            # check peptide length >= minlen
+                            if "short_pep" not in len_thresh(trimmed, minlen):
+                                header = "".join([">", nam, "_frame=", frame,
+                                                  ";ORF_num=", str(seqno + 1),
+                                                  "\n"])
+                                print header, trimmed
+                                seqno += 1
+                            else:
+                                continue
+                    else:
+                        # check peptide length >= minlen
+                        if "short_pep" not in len_thresh(pep, minlen):
+                            header = "".join([">", nam, "_frame=", frame,
+                                              ";ORF_num=", str(seqno + 1),
+                                              "\n"])
+                            print header, pep
+                            seqno += 1
+                        else:
+                            continue
         else:
             for frame in frames:
-                print "".join([">", nam, "_frame=", frame, "\n", trns[frame]])
+                # get rid of trailing "-"
+                pep = trim_off_stop(trns[frame])
+                if trim:
+                    trimmed = trim_met(pep)
+                    if "no_met" in trimmed:
+                        continue
+                    else:
+                        if "short_pep" not in len_thresh(trimmed, minlen):
+                            print "".join([">", nam, "_frame=", frame, "\n", trimmed])
+                        else:
+                            continue
+                else:
+                    if "short_pep" not in len_thresh(pep, minlen):
+                        print "".join([">", nam, "_frame=", frame, "\n", pep])
+                    else:
+                        continue
 else:
     with open(outfile,"w") as finalout:
         for nam, trns in outdic.items():
@@ -213,10 +305,49 @@ else:
                 for frame in frames:
                     seqno = 0
                     for rec in trns[frame]:
-                        header = "".join([">", nam, "_frame=", frame, ";ORF_num=", str(seqno + 1), "\n"])
-                        print >> finalout, header, trns[frame][seqno]
-                        seqno += 1
+                        pep = trim_off_stop(trns[frame][seqno])
+                        if trim:
+                            trimmed = trim_met(pep)
+                            if "no_met" in trimmed:
+                                continue
+                            else:
+                                # check peptide length >= minlen
+                                if "short_pep" not in len_thresh(trimmed, minlen):
+                                    header = "".join([">", nam, "_frame=", frame,
+                                                      ";ORF_num=", str(seqno + 1),
+                                                      "\n"])
+                                    print header, trimmed
+                                    seqno += 1
+                                else:
+                                    continue
+                        else:
+                            # check peptide length >= minlen
+                            if "short_pep" not in len_thresh(pep, minlen):
+                                header = "".join([">", nam, "_frame=", frame,
+                                                  ";ORF_num=", str(seqno + 1), "\n"])
+                                print >> finalout, header, pep
+                                seqno += 1
+                            else:
+                                continue
             else:
                 for frame in frames:
-                    print >> finalout, "".join([">", nam, "_frame=", frame, "\n", trns[frame]])
+                    pep = trim_off_stop(trns[frame][seqno])
+                    if trim:
+                        trimmed = trim_met(pep)
+                        if "no_met" in trimmed:
+                            continue
+                        else:
+                            # check peptide length >= minlen
+                            if "short_pep" not in len_thresh(trimmed, minlen):
+                                print >> finalout, "".join([">", nam, "_frame=",
+                                                            frame, "\n", trimmed])
+                            else:
+                                continue
+                    else:
+                        # check peptide length >= minlen
+                        if "short_pep" not in len_thresh(pep, minlen):
+                            print >> finalout, "".join([">", nam, "_frame=", frame,
+                                                        "\n", pep])
+                        else:
+                            continue
 ### EOF ###
