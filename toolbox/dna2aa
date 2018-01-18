@@ -1,42 +1,33 @@
 #!/usr/bin/env python
-## @package dna2aa 
-#	Translate the input sequence in the specified or all frames.
-#
-#	Output: .fa file of translated subject sequences.
-#	These sequences are naively translated as internal ORFs,
-#	and are likely larger than the sequence's true ORF.
-#	The output is best suited to use for hmmer-like alignments.
-#
-#	Written by Austin Hammond, GSC 2015
 
+## @package dna2aa 
+
+#   Translate the input sequence in the specified or all frames.
+#
+
+#   Output: .fa file of translated subject sequences.
+
+#   These sequences are naively translated as internal ORFs,
+
+#   and are likely larger than the sequence's true ORF.
+
+#   The output is best suited to use for hmmer-like alignments.
+#
+
+#   Alternatively, using the 'seqbreak' option, ORFs are broken
+
+#   at stop codons.
+#
+
+#   Written by Austin Hammond, GSC 2015
 import argparse
 import sys
 import csv
-
-from itertools import groupby
-
 import fastatools as ft
 
 
-# sorry for the long argparse lines, it gets angry otherwise
-parser = argparse.ArgumentParser(description='Naively translate the input DNA sequence.')
-parser.add_argument('--sequence', '-s', action='store', help="The fasta file of DNA sequences [STDIN]", default='stdin')
-parser.add_argument('--frame', '-f', action='store', choices=['+1','+2','+3','-1','-2','-3','all'], help="Frame to use for sequence translation [all]", default='all')
-#parser.add_argument('--seqbreak','-b',action='store_true',help="Break translations at in-frame stop codons")
-parser.add_argument('--outfile', '-o', action='store', help='Name to use for output fasta file [STDOUT]', default='stdout')
-parser.add_argument('--mito', '-m', action='store_true', help='Sequence is mitochondrial; use vertebrate Mt code. Currently not smart enough to allow stop codons to be completed by polyadenylation.')
-
-args = parser.parse_args()
-
-frm = args.frame
-fasta = args.sequence
-fastadic = {}
-outfile = args.outfile
-outdic = {}
-
-# extra functions
 def mtdna2aa(seq):
-	tbl = {"ATT":"I", "ATC":"I", "ATA":"M", "CTT":"L", "CTC":"L", "CTA":"L", "CTG":"L",
+    tbl = {"ATT":"I", "ATC":"I", "ATA":"M", "CTT":"L", "CTC":"L", "CTA":"L", "CTG":"L",
         "TTA":"L", "TTG":"L", "GTT":"V", "GTC":"V", "GTA":"V", "GTG":"V", "TTT":"F",
         "TTC":"F", "ATG":"M", "TGT":"C", "TGC":"C", "GCT":"A", "GCC":"A", "GCA":"A",
         "GCG":"A", "GGT":"G", "GGC":"G", "GGA":"G", "GGG":"G", "CCT":"P", "CCC":"P",
@@ -46,140 +37,186 @@ def mtdna2aa(seq):
         "GAA":"E", "GAG":"E", "GAT":"D", "GAC":"D", "AAA":"K", "AAG":"K", "CGT":"R",
         "CGC":"R", "CGA":"R", "CGG":"R", "AGA":"-", "AGG":"-", "TAA":"-", "TAG":"-",
         "TGA":"W"}
-	j = 0 # for iteration
-	aa = ''
-	seql = len(seq)
-	if seql % 3 != 0:
-		seq = seq[0:(seql-seql%3)] #trim to multiple of 3, but should be already
-	seql = len(seq) #recalculate
-	for j in range(0,seql,3):
-		j += 1
-		if j == (seql-1):
-			codon = seq[j:]
-		else:
-			codon = seq[j-1:j+2]
-#	print codon
-		aa = aa + tbl[codon]
-	# force first codon to be M
-	aa = "M" + aa[1:]
+    j = 0 # for iteration
+    aa = ''
+    seql = len(seq)
+    if seql % 3 != 0:
+        seq = seq[0:(seql-seql%3)] #trim to multiple of 3, but should be already
+    seql = len(seq) #recalculate
+    for j in range(0,seql,3):
+        j += 1
+        if j == (seql-1):
+            codon = seq[j:]
+        else:
+            codon = seq[j-1:j+2]
+    # print codon
+        aa = aa + tbl[codon]
+    # force first codon to be M
+    aa = "M" + aa[1:]
+    return aa
 
-	return aa
 
 def mtsixframe(seq):
-	one = mtdna2aa(seq)
-	two = mtdna2aa(seq[1:])
-	three = mtdna2aa(seq[2:])
-	none = mtdna2aa(ft.revcomp(seq))
-	ntwo = mtdna2aa(ft.revcomp(seq)[1:])
-	nthree = mtdna2aa(ft.revcomp(seq)[2:])
+    one = mtdna2aa(seq)
+    two = mtdna2aa(seq[1:])
+    three = mtdna2aa(seq[2:])
+    none = mtdna2aa(ft.revcomp(seq))
+    ntwo = mtdna2aa(ft.revcomp(seq)[1:])
+    nthree = mtdna2aa(ft.revcomp(seq)[2:])
+    return [one, two, three, none, ntwo, nthree]    
 
-	return [one, two, three, none, ntwo, nthree]	
+# setup parser
+parser = argparse.ArgumentParser(
+    description='Naively translate the input DNA sequence.')
+parser.add_argument(
+    '--sequence', '-s', action='store', help="The fasta file of DNA sequences [STDIN]",
+    default='stdin')
+parser.add_argument('--frame', '-f', action='store',
+    choices=['+1','+2','+3','-1','-2','-3','all'],
+    help="Frame to use for sequence translation [all]", default='all')
+parser.add_argument('--seqbreak','-b',action='store_true',
+    help="Break translations at in-frame stop codons")
+parser.add_argument('--outfile', '-o', action='store',
+    help='Name to use for output fasta file [STDOUT]', default='stdout')
+parser.add_argument('--mito', '-m', action='store_true', 
+    help=('Sequence is mitochondrial; use vertebrate Mt code.'
+        ' Does not allow stop codons to be completed by polyadenylation.'))
 
-## main
+# parse args
+args = parser.parse_args()
+frm = args.frame
+fasta = args.sequence
+fastadic = {}
+outfile = args.outfile
+outdic = {}
+mito = args.mito
+seqbreak = args.seqbreak
 
-#	read in the input sequences
-#if len(sys.argv) == 1:
-#	parser.print_help()
-#	quit()
+# check that the frame was passed properly
+if frm == 'all':
+    pass
+elif "+" in frm:
+    pass
+elif frm == '1':
+    frm = '+1'
+elif frm == '2':
+    frm = '+2'
+elif frm == '3':
+    frm = '+3'
+elif "-" not in frm:
+    print "ERROR: I didn't understand what reading frame you want."
+    print "Please specify 'all' or a single frame including + or - and retry."
+    sys.exit(1)
 
+# define possible reading frames
+if frm == 'all':
+    frames = ['+1','+2','+3','-1','-2','-3']
+else:
+    frames = [frm]
+
+# read in sequence input
 if fasta == 'stdin':
-	for rec in ft.fasta_iter(sys.stdin):
-		fastadic[rec[0].split(" ")[0]] = rec[1]
-
+    for rec in ft.fasta_iter(sys.stdin):
+        fastadic[rec[0].split(" ")[0]] = rec[1]
 else:
-	with open(fasta) as fa:
-		for rec in ft.fasta_iter(fa):
-			fastadic[rec[0].split(" ")[0]] = rec[1]
+    with open(fasta) as fa:
+        for rec in ft.fasta_iter(fa):
+            sid = rec[0].split(" ")[0]
+            sqn = rec[1]
+            fastadic[sid] = sqn
+if seqbreak:
+    # setup separate dict to hold split translations
+    transdic = {}
+for sid, sqn in fastadic.items():
+    if mito == True:
+        if frm == 'all':
+            trns = mtsixframe(sqn)
+        elif frm == '+1':
+            trns = mtdna2aa(sqn)
+        elif frm == '+2':
+            trns = mtdna2aa(sqn[1:])
+        elif frm == '+3':
+            trns = mtdna2aa(sqn[2:])
+        elif frm == '-1':
+            trns = mtdna2aa(ft.revcomp(sqn))
+        elif frm == '-2':
+            trns = mtdna2aa(ft.revcomp(sqn)[1:])
+        else:
+            trns = mtdna2aa(ft.revcomp(sqn)[2:])
+    else:
+        if frm == 'all':
+            trns = ft.sixframe(sqn)
+        elif frm == '+1':
+            trns = ft.dna2aa(sqn)
+        elif frm == '+2':
+            trns = ft.dna2aa(sqn[1:])
+        elif frm == '+3':
+            trns = ft.dna2aa(sqn[2:])
+        elif frm == '-1':
+            trns = ft.dna2aa(ft.revcomp(sqn))
+        elif frm == '-2':
+            trns = ft.dna2aa(ft.revcomp(sqn)[1:])
+        else:
+            trns = ft.dna2aa(ft.revcomp(sqn)[2:])
+    # setup output dict entry
+    outdic[sid] = {}
+    if seqbreak:
+        # if frm == all, trns is a list; otherwise is a string #TODO make always a list
+        if type(trns) == list:
+            if frm == 'all':
+                transzip = zip(frames, trns)
+            else:
+                transzip = (frm, trns)
+            for rec in transzip:
+                thisframe = rec[0]
+                thisseq = rec[1]
+                #splitsies = [x.split("-") for x in thisseq]
+                splitsies = thisseq.split("-")
+                # drop empty frames
+                splitsies = [x for x in splitsies if x]
+                outdic[sid][thisframe] = splitsies
+        else:
+            splitsies = trns.split("-") # split into ORFs
+            multi = [x for x in splitsies if x] # drop empty ORFs
+            outdic[sid][frm] = multi
+    else:
+        if type(trns) == list:
+            outdic[sid] = {}
+            if frm == 'all':
+                transzip = zip(frames, trns)
+            else:
+                transzip = (frm, trns)
+            for rec in transzip:
+                thisframe = rec[0]
+                thisseq = rec[1]
+                outdic[sid][thisframe] = thisseq
+        else:
+            outdic[sid][frm] = trns
 
-#	translate the input sequence as specified by the user
-#if seqbreak:
-	# need to handle the many 'imaginary' 3' partial ORFs (stop but no start)
-#	for sqn in fastadic.items():
-#                if frm == 'all':
-#                        trns=sixframe(sqn[1])
-#		elif frm == '+1':
-#                        trns=dna2aa(sqn[1])
-#                elif frm == '+2':
-#                        trns=dna2aa(sqn[1][1:])
-#                elif frm == '+3':
-#                        trns=dna22(sqn[1][2:])
-#                elif frm == '-1':
-#                        trns=dna2aa(revcomp(sqn[1]))
-#                elif frm == '-2':
-#                        trns=dna2aa(revcomp(sqn[1])[1:])
-#                else:
-#                        trns=dna2aa(revcomp(sqn[1])[2:])
-
-		# split the translations at the stop
- #            	transdic={}
-#		multi=filter(bool,sqn[1].split("-")) ####### finish from here, make sure to split correctly
-#		transdic[sqn[0]]={}
-#		j=0 # for iterating over the partial ORFs
-		# set each of the pieces as entries in the new dict
-#		for i in range(0,len(multi)):
-#			if length i >= 5:
-#				transdic[sqn[0]][sqn[0]+"-"+str(i)]=multi[i]
-
-#        	outdic[sqn[0]]=trns
-
-	
-#else: #if finished and activated, add one indent level to the code below
-for sqn in fastadic.items():
-
-	if args.mito == True:
-		if frm == 'all':
-			trns = mtsixframe(sqn[1])
-		elif frm == '+1':
-			trns = mtdna2aa(sqn[1])
-		elif frm == '+2':
-			trns = mtdna2aa(sqn[1][1:])
-		elif frm == '+3':
-			trns = mtdna2aa(sqn[1][2:])
-		elif frm == '-1':
-			trns = mtdna2aa(ft.revcomp(sqn[1]))
-		elif frm == '-2':
-			trns = mtdna2aa(ft.revcomp(sqn[1])[1:])
-		else:
-			trns = mtdna2aa(ft.revcomp(sqn[1])[2:])
-
-	else:
-		if frm == 'all':
-			trns = ft.sixframe(sqn[1])
-		elif frm == '+1':
-			trns = ft.dna2aa(sqn[1])
-		elif frm == '+2':
-			trns = ft.dna2aa(sqn[1][1:])
-		elif frm == '+3':
-			trns = ft.dna2aa(sqn[1][2:])
-		elif frm == '-1':
-			trns = ft.dna2aa(ft.revcomp(sqn[1]))
-		elif frm == '-2':
-			trns = ft.dna2aa(ft.revcomp(sqn[1])[1:])
-		else:
-			trns = ft.dna2aa(ft.revcomp(sqn[1])[2:])
-
-	outdic[sqn[0]] = trns
-	
-#	write out the output
+# write the translations to a file
 if outfile == 'stdout':
-	for trns in outdic.items():
-		if frm == 'all':
-			i = 0 # for iteration over the translations
-			for sqn in ['+1','+2','+3','-1','-2','-3']:
-				sys.stdout.write(">" + trns[0] + "_frame=" + sqn + "\n" + trns[1][i] + "\n")
-				i += 1
-		else:
-			sys.stdout.write(">" + trns[0] + "_frame=" + frm + "\n" + trns[1] + "\n")
-
+    for nam, trns in outdic.items():
+        if seqbreak:
+            for frame in frames:
+                seqno = 0
+                for rec in trns[frame]:
+                    header = "".join([">", nam, "_frame=", frame, ";ORF_num=", str(seqno + 1), "\n"])
+                    print header, trns[frame][seqno]
+                    seqno += 1
+        else:
+            for frame in frames:
+                print "".join([">", nam, "_frame=", frame, "\n", trns[frame]])
 else:
-	with open(outfile,"w") as finalout:
-		for trns in outdic.items():
-			if frm == 'all':
-				i = 0 # for iteration over the translations
-				for sqn in ['+1','+2','+3','-1','-2','-3']:
-					finalout.write(">" + trns[0] + "_frame=" + sqn + "\n" + trns[1][i] + "\n")
-					i += 1
-			else:
-				finalout.write(">" + trns[0] + "_frame=" + frm + "\n" + trns[1] + "\n")
-
+    with open(outfile,"w") as finalout:
+        for nam, trns in outdic.items():
+            if seqbreak:
+                for frame in frames:
+                    seqno = 0
+                    for rec in trns[frame]:
+                        header = "".join([">", nam, "_frame=", frame, ";ORF_num=", str(seqno + 1), "\n"])
+                        print >> finalout, header, trns[frame][seqno]
+                        seqno += 1
+            else:
+                for frame in frames:
+                    print >> finalout, "".join([">", nam, "_frame=", frame, "\n", trns[frame]])
 ### EOF ###
