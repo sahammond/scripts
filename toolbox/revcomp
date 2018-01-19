@@ -1,0 +1,18 @@
+#!/home/shammond/arch/CentOS_5/bin/python
+
+from fastatools import revcomp
+import sys
+
+# pipe in a naked sequence or a fasta file
+
+if not sys.stdin.isatty():
+	for line in sys.stdin:
+		if line[0] == ">":
+			sys.stdout.write(line.strip("\n")+"_revcomp"+"\n")
+		else:
+			sys.stdout.write(revcomp(line.strip("\n").upper())+"\n")
+else:
+	print "Usage: cat sequence.fa | revcomp"
+	print '  or: echo "GATTACA" | revcomp'
+	sys.exit(1)
+### EOF ###
