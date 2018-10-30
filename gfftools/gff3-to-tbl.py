@@ -104,39 +104,6 @@ with open(gff,"r") as infile:
                     if re.findall(genes[gene].id,parent):
                         genes[gene].transcript[parent].add_cds(feature)
 
-###################
-# adjust small intron boundaries (ncbi min intron length is 10 bp)
-# use steps of 3 to preserve frame
-#  this will effectively delete up to 4 amino acids per adjustment (max if intron len was 1)
-print "Checking intron lengths"
-for entry in genes:
-    for rec in genes[entry].transcript:
-#        print "Checking intron lengths in " + rec
-        for j in range(0,len(genes[entry].transcript[rec].exons)):
-            dist = 11
-            try:
-                dist = int(genes[entry].transcript[rec].exons[j+1].start) - int(genes[entry].transcript[rec].exons[j].end)
-#                print dist
-            except:
-                pass
-            while dist < 11: # if use 'while dist < 10:' then too-small introns remain...
-                print "Correcting intron length between " + rec + " exons " + str(j+1) + " and " + str(j+2)
-                genes[entry].transcript[rec].exons[j+1].start = str(int(
-                            genes[entry].transcript[rec].exons[j+1].start) + 3)
-                dist += 3
-        # adjust the corresponding CDS start too, if the CDS start == that exon's start!
-        for j in range(0,len(genes[entry].transcript[rec].cds)):
-            dist = 11
-            try:
-                dist = int(genes[entry].transcript[rec].cds[j+1].start) - int(genes[entry].transcript[rec].cds[j].end)
-#                print dist
-            except:
-                pass
-            while dist < 11: # if use 'while dist < 10:' then too-small introns remain...
-                print "Applying intron length correction between " + rec + " exons " + str(j+1) + " and " + str(j+2) + " to the CDS too"
-                genes[entry].transcript[rec].cds[j+1].start = str(int(
-                            genes[entry].transcript[rec].cds[j+1].start) + 3)
-                dist += 3
 
 ###################
 # Collect annotations for each transcript
@@ -159,8 +126,6 @@ with open(aln,"r") as blast:
                     else:
                         break
                 annots[thisaln[0]] = PRE + SEPO + refnam
-#            else:
-#                annots[thisaln[0]] = UNK
             aseen.add(thisaln[0])
 
 ####################
@@ -184,8 +149,6 @@ locflag = 0 # flag to indicate first instance of locus ID
 lokey_dict = {}
 print "Adding locus tags and applying functional annotations"
 for scaf in scaf_order:
-#    scaf_order[scaf].sort(key = lambda x: x[1])
-#    for entry in scaf_order[scaf]:
     for entry in sorted(scaf_order[scaf],key = lambda x: int(x[1])):
         gene_name = entry[0]
         if locflag == 0:
@@ -203,43 +166,25 @@ for scaf in scaf_order:
         #  letter if needed
         if len(genes[gene_name].transcript) == 1:
             tr_id = genes[gene_name].transcript.keys()[0]
-#            genes[gene_name].transcript[tr_id].locus_tag = nam
             genes[gene_name].transcript[tr_id].transcript.locus_tag = nam
             lokey.write(tr_id + "\t" + nam + "\n")
 
             if genes[gene_name].transcript[tr_id].transcript.type == "mRNA":
                 if tr_id in annots:
-#                    genes[gene_name].transcript[tr_id].product = annots[tr_id]
                     genes[gene_name].transcript[tr_id].transcript.product = annots[tr_id]
                 else:
-#                    genes[gene_name].transcript[tr_id].product = UNK
                     genes[gene_name].transcript[tr_id].transcript.product = UNK
-
-#            for exon in range(0,len(genes[gene_name].transcript[tr_id].exons)):
-#                genes[gene_name].transcript[tr_id].exons[exon].locus_tag = nam
-#            if genes[gene_name].transcript[tr_id].cds:
-#                for i in range(0,len(genes[gene_name].transcript[tr_id].cds)):
-#                    genes[gene_name].transcript[tr_id].cds[i].locus_tag = nam
         else:
             loc_iter = 0
             for prod in sorted(genes[gene_name].transcript):
-#                genes[gene_name].transcript[prod].locus_tag = nam + ISOALPHA[loc_iter]
                 genes[gene_name].transcript[prod].transcript.locus_tag = nam + ISOALPHA[loc_iter]
                 lokey.write(prod + "\t" + nam + ISOALPHA[loc_iter] + "\n")
 
                 if genes[gene_name].transcript[prod].transcript.type == "mRNA":
                     if prod in annots:
-#                        genes[gene_name].transcript[prod].product = annots[prod]
                         genes[gene_name].transcript[prod].transcript.product = annots[prod]
                     else:
-#                        genes[gene_name].transcript[prod].product = UNK
                         genes[gene_name].transcript[prod].transcript.product = UNK
-
-#                for i in range(0,len(genes[gene_name].transcript[prod].exons)):
-#                    genes[gene_name].transcript[prod].exons[i].locus_tag = nam + ISOALPHA[loc_iter]
-#                if genes[gene_name].transcript[prod].cds:
-#                    for j in range(0,len(genes[gene_name].transcript[prod].cds)):
-#                        genes[gene_name].transcript[prod].cds[j].locus_tag = nam + ISOALPHA[loc_iter]
                 loc_iter += 1
 lokey.close()
 
@@ -258,17 +203,13 @@ prev_scaf = ''
 # order genes by ID; hopefully this corresponds to their position on the scaffold
 print "Writing final .tbl file"
 for scaf in scaf_order:
-#    for entry in scaf_order[scaf]:
     for entry in sorted(scaf_order[scaf], key=lambda x: int(x[1])):
         rec = entry[0]
-#        for rec in sorted(genes):
-#        if genes[rec].gene.seqid not in scafs:
         if genes[rec].gene.seqid != prev_scaf:
             tblout.write("".join([">Feature ",genes[rec].gene.seqid,"\n"]))
             tblout.write("\t".join(["1",str(len(genome[genes[rec].gene.seqid])),
                                             "REFERENCE\n"]))
             tblout.write("\t".join(["\t\t\tPBARC","12345\n"]))
-#            scafs.add(genes[rec].gene.seqid)
 
         tblout.write(str(genes[rec].print_gene()))
         prev_scaf = genes[rec].gene.seqid
@@ -293,21 +234,5 @@ for scaf in scaf_order:
                 print "Failed to write out " + str(genes[rec].transcript[prod].transcript.id)
 
 tblout.close
-
-###################
-# output (repaired) gff lines
-#print "Writing .gff equivalent of .tbl file"
-#for rec in sorted(genes):
-#    gffout.write(str(genes[rec].print_gene(outform = 'gff')))
-#
-#    for prod in sorted(genes[rec].transcript.keys()):
-#        try:
-#            gffout.write(str(genes[rec].transcript[prod].print_transcript(
-#                        product_type = genes[rec].transcript[prod].transcript.type,
-#                        outform = 'gff')))
-#        except:
-#            print "Failed to write out "+str(genes[rec].transcript[prod].transcript.id)
-#
-#gffout.close
 
 ### EOF ###
