@@ -80,7 +80,8 @@ with open(gff,"r") as infile:
         feature = gfftools.GFF(line)
 
         if feature.type == "gene":
-            genes[feature.id] = gfftools.Gene(feature)
+            if not genes[feature.id]:
+                genes[feature.id] = gfftools.Gene(feature)
 
         elif feature.type == "mRNA" or feature.type == "ncRNA":
             # transcripts can only have one parent, so access it explicitly
@@ -91,9 +92,29 @@ with open(gff,"r") as infile:
                 genes[feature.name].transcript[feature.parent[0]].add_exon(feature)
                 continue
             for parent in feature.parent:
+                # create a gene and transcript entry if not yet loaded
+                this_gene = '-'.join(parent.split('-')[0:6])
+                print this_gene
+                if this_gene not in genes:
+                    this_scaff = feature.seqid
+                    built_gene = '\t'.join([this_scaff, 'constructed', 'gene', feature.start, feature.end, feature.score, feature.strand, feature.offset, 'ID=' + this_gene])
+                    print built_gene
+                    genes[this_gene] = gfftools.Gene(gfftools.GFF(built_gene)) # kludge
+                    built_transcript = '\t'.join([this_scaff, 'constructed', 'mRNA', feature.start, feature.end, feature.score, feature.strand, feature.offset, 'ID=' + parent + ';Parent=' + this_gene])
+                    print built_transcript
+                    genes[this_gene].add_transcript(gfftools.GFF(built_transcript))
+                    genes[this_gene].transcript[parent].add_exon(feature)
+                    continue
                 for gene in genes:
                     if re.findall(genes[gene].id,parent):
-                        genes[gene].transcript[parent].add_exon(feature)
+                        try: 
+                            genes[gene].transcript[parent].add_exon(feature)
+                        except:
+                            this_scaff = feature.seqid
+                            built_transcript = '\t'.join([this_scaff, 'constructed', 'mRNA', feature.start, feature.end, feature.score, feature.strand, feature.offset, 'ID=' + parent + ';Parent=' + this_gene])
+                            print built_transcript
+                            genes[this_gene].add_transcript(gfftools.GFF(built_transcript))
+                            genes[this_gene].transcript[parent].add_exon(feature)
 
         elif feature.type == "CDS":
             if feature.name:
@@ -103,6 +124,32 @@ with open(gff,"r") as infile:
                 for gene in genes:
                     if re.findall(genes[gene].id,parent):
                         genes[gene].transcript[parent].add_cds(feature)
+
+# correct gene boundaries
+for gene in genes:
+    this_gene = genes[gene]
+    if this_gene.gene.strand == '+':
+        tmax = float('-Inf')
+        tmin = float('Inf')
+        for transcript in this_gene.transcript:
+            this_transcript = this_gene.transcript[transcript]
+            if this_transcript.exons[0].start < tmin:
+                tmin = this_transcript.exons[0].start
+            if this_transcript.exons[-1].end > tmax:
+                tmax = this_transcript.exons[-1].end
+        genes[gene].gene.start = tmin
+        genes[gene].gene.end = tmax
+    if this_gene.gene.strand == '-':
+        tmax = float('Inf')
+        tmin = float('-Inf')
+        for transcript in this_gene.transcript:
+            this_transcript = this_gene.transcript[transcript]
+            if this_transcript.exons[-1].start > tmin:
+                tmin = this_transcript.exons[-1].start
+            if this_transcript.exons[0].end < tmax:
+                tmax = this_transcript.exons[0].end
+        genes[gene].gene.start = tmin
+        genes[gene].gene.end = tmax
 
 ###################
 # adjust small intron boundaries (ncbi min intron length is 10 bp)
